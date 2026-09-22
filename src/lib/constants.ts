@@ -8,14 +8,27 @@
 export const PRODUCT_IDS = ["aisc-issues"] as const;
 export const CURRENT_PRODUCT = PRODUCT_IDS[0];
 
-/** 仓库内反馈 md 路径（私有反馈仓库） */
-export function feedbackPath(id: string): string {
-  return `feedback/${id}.md`;
+/** 反馈条目根目录（私有反馈仓库）：每条反馈一个子目录，md 与附件同目录 */
+export const ISSUES_DIR = "issues";
+
+/** 问题路径 md 文件名 / 功能路径 md 文件名（同目录） */
+export const ISSUE_MD_NAME = "反馈.md";
+export const FEATURE_MD_NAME = "需求.md";
+
+/** 仓库根索引文件（反馈/需求两表，v0.1.2） */
+export const INDEX_PATH = "索引.md";
+
+/** 服务端上传暂存区（v0.1.2 起迁至 issues/_pending） */
+export const PENDING_BASE = "issues/_pending";
+
+/** 条目目录：issues/{目录名} */
+export function itemDirPath(id: string): string {
+  return `${ISSUES_DIR}/${id}`;
 }
 
-/** 仓库内附件目录前缀（私有反馈仓库；调用方自行拼 /文件名） */
-export function assetsPath(id: string): string {
-  return `feedback/assets/${id}`;
+/** 条目 md 的两个候选路径（问题/功能文件名不同，依次探测） */
+export function itemMdCandidates(id: string): string[] {
+  return [`${itemDirPath(id)}/${ISSUE_MD_NAME}`, `${itemDirPath(id)}/${FEATURE_MD_NAME}`];
 }
 
 /** affects 投票计数的写入上限（防异常值，02-design §1.1） */
@@ -105,8 +118,8 @@ export function statusLabel(
   return STATUS_LABELS[status][category];
 }
 
-/** 反馈 id / 用户可见编号格式（02 §5.1） */
-export const ID_PATTERN = /^\d{8}-\d{6}-[a-z0-9]{6}$/;
+/** 条目目录名格式：{YYYYMMDD}-{概述}-{提出者}（v0.1.2；中文目录名） */
+export const ID_PATTERN = /^\d{8}-[A-Za-z0-9一-龥._-]{1,120}$/;
 
 /** 空态文案（v0.1.1 R4 基线演进：不含任何时限承诺） */
 export const EMPTY_REPLY_TEXT = "还没有回复，过几天再来看看。";

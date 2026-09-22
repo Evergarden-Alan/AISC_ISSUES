@@ -22,7 +22,7 @@ export interface FeedbackFrontmatter {
   tier: TierValue; // 功能路径恒为 "basic"
   created_at: string; // "2026-09-21T14:30:25+08:00"
   updated_at: string;
-  nickname?: string; // 选填称呼 ≤20 字（v0.1.0 起 contact 已移除）
+  nickname: string; // v0.1.2 必填（作目录署名与详情页展示） // 选填称呼 ≤20 字（v0.1.0 起 contact 已移除）
   duplicate_of?: string; // 仅 status = duplicate
   archived: boolean; // 恒为 false（v1）
   affects?: number; // v0.1.1 新增：投票计数，缺省视为 0（读取层经 affectsOf 归一化）
@@ -40,7 +40,7 @@ export interface ValidatedFeedback {
   actual?: string;
   scenario?: string; // 仅功能路径
   workaround?: string; // 仅功能路径
-  nickname?: string;
+  nickname: string; // v0.1.2 必填（作目录署名与详情页展示）
   screenshots?: { ref: string; originalName: string }[]; // _pending 引用，≤3
   attachments?: { ref: string; originalName: string }[]; // 仅问题路径，≤3；非空 ⇒ tier=detailed
   env: {

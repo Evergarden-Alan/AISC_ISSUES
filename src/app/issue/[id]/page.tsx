@@ -1,16 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { ID_PATTERN, HIDDEN_TEXT, NO_REPLY_DETAIL_TEXT } from "@/lib/constants";
+import { ID_PATTERN, NO_REPLY_DETAIL_TEXT } from "@/lib/constants";
 import { getIssue } from "@/lib/data";
 import { affectsOf } from "@/lib/markdown-utils";
 import { StatusBadge, TypeBadge, SeverityBadge } from "@/components/badges";
 import { IssueDetailBody } from "@/components/issue-detail-body";
 import { VoteButton } from "@/components/vote-button";
 
-// 专属详情页 /issue/{id}?t={token}（01 §6.2，M2）
-// 公开可访问（编号 6 位随机串不可枚举），t 为提交者凭证但不作强制拦截（已拍板②）。
-// ISR 300s；hidden 整页仅显示隐藏提示。
+// 专属详情页 /issue/{目录名}?t={token}（v0.1.2：目录名即 id）
+// 公开可访问，t 为提交者凭证但不作强制拦截。ISR 300s。
 
 export const revalidate = 300;
 
@@ -25,25 +24,17 @@ export default async function IssueDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
+  // 动态路由参数以百分号编码到达（目录名含中文），需先解码
+  let id = "";
+  try {
+    id = decodeURIComponent((await params).id);
+  } catch {
+    notFound();
+  }
   if (!ID_PATTERN.test(id)) notFound();
 
   const result = await getIssue(id);
   if (!result) notFound();
-
-  if (result.kind === "hidden") {
-    return (
-      <main className="mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center px-4 text-center">
-        <p className="text-lg text-slate-600">{HIDDEN_TEXT}</p>
-        <Link
-          href="/"
-          className="mt-6 inline-flex h-11 items-center rounded-lg bg-blue-600 px-5 text-base font-medium text-white hover:bg-blue-700"
-        >
-          返回首页
-        </Link>
-      </main>
-    );
-  }
 
   const { fm, sections, replies, category } = result.detail;
 

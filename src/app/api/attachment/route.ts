@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
   const dir = uploadId || crypto.randomUUID();
   const ref = `_pending/${dir}/${safeName}`;
   const path = isChunk
-    ? `feedback/assets/_pending/${dir}/${safeName}.part${form.get("index")}`
+    ? `issues/_pending/${dir}/${safeName}.part${form.get("index")}`
     : `feedback/assets/${ref}`;
   try {
     for (let attempt = 0; ; attempt++) {
@@ -204,7 +204,7 @@ async function finalize(form: FormData): Promise<NextResponse> {
     for (let i = 0; i < total; i++) {
       // raw 读取（>1MB 文件 JSON 读不返回 content）；带重试应对写后读短暂 404
       const b = await githubGetFileBytesRetry(
-        `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`,
+        `issues/_pending/${uploadId}/${safeName}.part${i}`,
         { attempts: 5, delayMs: 800 }
       );
       if (!b) return fail("分片缺失，请重新上传该文件");
@@ -242,7 +242,7 @@ async function finalize(form: FormData): Promise<NextResponse> {
       Array.from({ length: total }, (_, i) =>
         (async () => {
           try {
-            const p = `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`;
+            const p = `issues/_pending/${uploadId}/${safeName}.part${i}`;
             const meta = await githubGetFileMeta(p);
             if (meta?.sha) await githubDeleteFile(p, meta.sha, "asset: 清理分片");
           } catch {

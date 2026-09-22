@@ -27,6 +27,7 @@ const FEATURE_OK = {
   type: "feature",
   title: "希望能批量导出",
   description: "一次导出多个报表",
+  nickname: "阿明",
   scenario: "月底汇总",
   workaround: "手动导出",
   env: {},
@@ -224,4 +225,13 @@ test("非对象/数组请求体拒绝", () => {
   assert.equal(validateSubmission(null).ok, false);
   assert.equal(validateSubmission([1, 2]).ok, false);
   assert.equal(validateSubmission("hello").ok, false);
+});
+
+test("v0.1.2：nickname 必填（目录署名）", () => {
+  const r = validateSubmission({ ...ISSUE_OK, nickname: "" });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.equal(r.error, "请填写称呼");
+  const r2 = validateSubmission({ ...FEATURE_OK, nickname: "  " });
+  assert.equal(r2.ok, false);
+  if (!r2.ok) assert.equal(r2.error, "请填写称呼");
 });

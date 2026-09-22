@@ -60,7 +60,7 @@ export function IssuesBrowser({
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     const qs = params.toString();
-    router.replace(qs ? `/issues?${qs}` : "/issues", { scroll: false });
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
   }, [keyword, from, to, router]);
 
   const filtered = useMemo(() => {

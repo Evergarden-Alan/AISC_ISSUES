@@ -61,12 +61,13 @@ test("setFrontmatterIntField：无 frontmatter / 无 status 锚点 → 原样返
   assert.equal(setFrontmatterIntField("---\nbroken", "affects", 1), "---\nbroken");
 });
 
-test("ID_PATTERN 复用：投票编号边界（缺段 / 大写 / 超长拒绝）", () => {
-  assert.ok(ID_PATTERN.test("20260921-143025-a3f9kz"));
-  assert.ok(!ID_PATTERN.test("20260921-143025")); // 缺随机段
-  assert.ok(!ID_PATTERN.test("20260921-143025-A3F9KZ")); // 大写
-  assert.ok(!ID_PATTERN.test("20260921-1430250-a3f9kz")); // 超长
-  assert.ok(!ID_PATTERN.test("x20260921-143025-a3f9kz"));
+test("ID_PATTERN 复用：投票目录名边界（v0.1.2）", () => {
+  assert.ok(ID_PATTERN.test("20260921-导出闪退-阿明"));
+  assert.ok(ID_PATTERN.test("20260921-143025-a3f9kz")); // 迁移期兼容旧式名
+  assert.ok(!ID_PATTERN.test("20260921")); // 缺概述段
+  assert.ok(!ID_PATTERN.test("2026092-导出闪退-阿明")); // 日期段不足 8 位
+  assert.ok(!ID_PATTERN.test("x20260921-导出闪退-阿明")); // 必须日期开头
+  assert.ok(!ID_PATTERN.test(`20260921-${"长".repeat(200)}`)); // 超长
 });
 
 test("hitVoteLimit（内存）：同（IP, 反馈）1 次/小时、跨窗口重置、另一条不受影响", async () => {

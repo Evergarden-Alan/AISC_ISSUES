@@ -179,7 +179,7 @@ function basename(ref: string): string {
   return ref.split("/").pop() ?? "file";
 }
 
-/** 截图分区：![截图 n](feedback/assets/{id}/s{n}-{安全化原名})；无则"（无）" */
+/** 截图分区：![截图 n](issues/{id}/s{n}-{安全化原名})；无则"（无）" */
 function renderScreenshotLines(
   id: string,
   shots?: { ref: string }[]
@@ -187,12 +187,12 @@ function renderScreenshotLines(
   if (!shots?.length) return NONE_PLACEHOLDER;
   return shots
     .map(
-      (s, i) => `![截图 ${i + 1}](feedback/assets/${id}/s${i + 1}-${basename(s.ref)})`
+      (s, i) => `![截图 ${i + 1}](issues/${id}/s${i + 1}-${basename(s.ref)})`
     )
     .join("\n\n");
 }
 
-/** 附件分区：[文件名](feedback/assets/{id}/a{n}-{安全化原名})；无则"（无）" */
+/** 附件分区：[文件名](issues/{id}/a{n}-{安全化原名})；无则"（无）" */
 function renderAttachmentLines(
   id: string,
   files?: { ref: string }[]
@@ -201,7 +201,7 @@ function renderAttachmentLines(
   return files
     .map(
       (f, i) =>
-        `[${basename(f.ref)}](feedback/assets/${id}/a${i + 1}-${basename(f.ref)})`
+        `[${basename(f.ref)}](issues/${id}/a${i + 1}-${basename(f.ref)})`
     )
     .join("\n\n");
 }

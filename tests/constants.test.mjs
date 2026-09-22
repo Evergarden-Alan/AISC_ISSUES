@@ -7,8 +7,10 @@ import {
   statusLabel,
   CURRENT_PRODUCT,
   PRODUCT_IDS,
-  feedbackPath,
-  assetsPath,
+  ISSUES_DIR,
+  INDEX_PATH,
+  itemDirPath,
+  itemMdCandidates,
   TYPE_VALUES,
   STATUS_VALUES,
   SEVERITY_VALUES,
@@ -64,7 +66,12 @@ test("schema 常量完备：7 状态 × 双映射、3 严重度、2 档位", () 
   assert.equal(CURRENT_PRODUCT, "aisc-issues");
 });
 
-test("R3 路径收口函数：feedbackPath / assetsPath", () => {
-  assert.equal(feedbackPath("20260921-143025-a3f9kz"), "feedback/20260921-143025-a3f9kz.md");
-  assert.equal(assetsPath("20260921-143025-a3f9kz"), "feedback/assets/20260921-143025-a3f9kz");
+test("v0.1.2 路径收口：issues/{目录}/（md 与附件同目录）", () => {
+  assert.equal(ISSUES_DIR, "issues");
+  assert.equal(INDEX_PATH, "索引.md");
+  assert.equal(itemDirPath("20260921-导出闪退-阿明"), "issues/20260921-导出闪退-阿明");
+  assert.deepEqual(itemMdCandidates("20260921-导出闪退-阿明"), [
+    "issues/20260921-导出闪退-阿明/反馈.md",
+    "issues/20260921-导出闪退-阿明/需求.md",
+  ]);
 });

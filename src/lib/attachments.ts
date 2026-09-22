@@ -89,9 +89,9 @@ export function sanitizeFileName(name: string): string {
   return safeExt ? `${safeBase}.${safeExt}` : safeBase;
 }
 
-/** /api/asset 路径白名单：feedback/assets/{id}/{文件名}，_pending 天然不匹配 */
+/** /api/asset 路径白名单：issues/{目录名}/{文件名}（v0.1.2 布局；_pending 多一段天然不匹配） */
 export const ASSET_PATH_PATTERN =
-  /^feedback\/assets\/[0-9]{8}-[0-9]{6}-[a-z0-9]{6}\/[A-Za-z0-9一-龥._-]+$/;
+  /^issues\/[A-Za-z0-9一-龥._-]{1,120}\/[A-Za-z0-9一-龥._-]+$/;
 
 /**
  * 附件引用白名单（v0.1.1 日期化目录，双格式兼容）：

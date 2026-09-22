@@ -27,25 +27,20 @@ test("sanitizeFileName：空格与特殊字符替换、扩展名小写、超长�
   assert.equal(sanitizeFileName("///"), "file");
 });
 
-test("isValidAssetPath：合法放行；../、_pending、越界路径拒绝", () => {
-  assert.ok(
-    isValidAssetPath("feedback/assets/20260921-143025-a3f9kz/s1-导出闪退.png")
-  );
-  assert.ok(
-    isValidAssetPath("feedback/assets/20260919-091512-m2x8q7/a1-aisc-debug.log")
-  );
+test("isValidAssetPath：合法放行；../、_pending、越界路径拒绝（v0.1.2 布局）", () => {
+  assert.ok(isValidAssetPath("issues/20260921-导出闪退-阿明/s1-导出闪退.png"));
+  assert.ok(isValidAssetPath("issues/20260921-143025-a3f9kz/a1-aisc-debug.log"));
   // 穿越与编码穿越
-  assert.ok(!isValidAssetPath("feedback/assets/../../../etc/passwd"));
-  assert.ok(
-    !isValidAssetPath("feedback/assets/20260921-143025-a3f9kz/..%2F..%2Fx.png")
-  );
-  // _pending 不匹配（目录段必须为 id 形态）
-  assert.ok(!isValidAssetPath("feedback/assets/_pending/xx/a.png"));
-  // 非 feedback/assets 前缀
+  assert.ok(!isValidAssetPath("issues/../../../etc/passwd"));
+  assert.ok(!isValidAssetPath("issues/20260921-导出闪退-阿明/..%2F..%2Fx.png"));
+  // _pending 暂存多一段路径，天然不匹配
+  assert.ok(!isValidAssetPath("issues/_pending/xx/a.png"));
+  // 非 issues 前缀（旧布局不再放行）
   assert.ok(!isValidAssetPath("feedback/20260921-143025-a3f9kz.md"));
+  assert.ok(!isValidAssetPath("feedback/assets/20260921-143025-a3f9kz/s1-x.png"));
   assert.ok(!isValidAssetPath(".github/workflows/x.yml"));
   // 文件名段为 ".." 显式拒绝
-  assert.ok(!isValidAssetPath("feedback/assets/20260921-143025-a3f9kz/.."));
+  assert.ok(!isValidAssetPath("issues/20260921-导出闪退-阿明/.."));
 });
 
 test("PENDING_REF_PATTERN：日期化目录与旧 uuid 目录双格式兼容", () => {
@@ -77,11 +72,13 @@ test("pendingDirDateMs：目录名日期时间（北京时间）→ epoch ms", (
   assert.equal(pendingDirDateMs("garbage"), null);
 });
 
-test("ASSET_PATH_PATTERN 形态约束", () => {
-  assert.match(
-    "feedback/assets/20260921-143025-a3f9kz/s1-白屏.png",
-    ASSET_PATH_PATTERN
-  );
+test("ASSET_PATH_PATTERN 形态约束（v0.1.2 issues/{目录}/{文件}）", () => {
+  assert.match("issues/20260921-导出闪退-阿明/s1-白屏.png", ASSET_PATH_PATTERN);
+  assert.match("issues/20260921-143025-a3f9kz/a1-debug.log", ASSET_PATH_PATTERN);
+  // _pending 暂存多一段路径，天然不匹配
+  assert.ok(!isValidAssetPath("issues/_pending/20260921-143005-3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/a.log"));
+  assert.ok(!isValidAssetPath("issues/../etc/passwd"));
+  assert.ok(!isValidAssetPath("feedback/assets/20260921-143025-a3f9kz/s1-白屏.png")); // 旧布局不再放行
 });
 
 test("魔数嗅闻：jpeg/png/webp/zip；文本与其他不误判", () => {

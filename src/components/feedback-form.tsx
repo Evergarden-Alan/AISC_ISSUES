@@ -50,6 +50,7 @@ export function FeedbackForm({ siteKey }: { siteKey?: string }) {
   const [toast, setToast] = useState("");
   const [savedHint, setSavedHint] = useState(false);
   const [pathHint, setPathHint] = useState("");
+  const [sparseAsk, setSparseAsk] = useState(false);
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,10 +131,35 @@ export function FeedbackForm({ siteKey }: { siteKey?: string }) {
       errs.description = "详细描述不能超过 2000 字";
     }
     const nickname = state.shared.nickname.trim();
-    if (nickname && charCount(nickname) > LIMITS.nickname) {
+    if (!nickname) {
+      errs.nickname = "请填写称呼"; // v0.1.2 必填
+    } else if (charCount(nickname) > LIMITS.nickname) {
       errs.nickname = "称呼不能超过 20 字";
     }
     return errs;
+  }
+
+  // 稀薄提交判定（v0.1.2 ③）：无截图/日志 + 复现三字段全空 + 描述过短
+  function isSparse(): boolean {
+    const noShots = state.shared.screenshots.length === 0;
+    const noLogs = !isIssue || state.issue.attachments.length === 0;
+    const noDetail =
+      !isIssue ||
+      (!state.issue.steps.trim() &&
+        !state.issue.expected.trim() &&
+        !state.issue.actual.trim());
+    const descShort = charCount(state.shared.description.trim()) < 15;
+    return noShots && noLogs && noDetail && descShort;
+  }
+
+  async function doSubmit() {
+    setSparseAsk(false);
+    // 先把含已上传附件引用的完整状态落盘，再跳转提交中转页执行真正的 POST。
+    // 中转页成功 → 成功页；失败 → 带原因跳回本页弹 toast（草稿已恢复）。
+    // Turnstile 开启时此处消耗一枚 token 随草稿带往中转页（默认关闭为空串）。
+    const turnstileToken = await getTurnstileToken();
+    saveDraft({ ...state, turnstileToken });
+    router.push("/submit/pending");
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -153,13 +179,14 @@ export function FeedbackForm({ siteKey }: { siteKey?: string }) {
       toastTimer.current = setTimeout(() => setToast(""), 5000);
       return;
     }
-
-    // 先把含已上传附件引用的完整状态落盘，再跳转提交中转页执行真正的 POST。
-    // 中转页成功 → 成功页；失败 → 带原因跳回本页弹 toast（草稿已恢复）。
-    // Turnstile 开启时此处消耗一枚 token 随草稿带往中转页（默认关闭为空串）。
-    const turnstileToken = await getTurnstileToken();
-    saveDraft({ ...state, turnstileToken });
-    router.push("/submit/pending");
+    if (!sparseAsk && isSparse()) {
+      setSparseAsk(true); // 提示可能难以定位问题，等用户确认
+      requestAnimationFrame(() => {
+        document.getElementById("sparse-warning")?.scrollIntoView({ block: "center" });
+      });
+      return;
+    }
+    await doSubmit();
   }
 
   const honeypotRef = useRef<HTMLInputElement>(null);
@@ -495,7 +522,7 @@ export function FeedbackForm({ siteKey }: { siteKey?: string }) {
 
       {/* 怎么称呼您（两路径共用，选填 ≤20 字） */}
       <div className="mt-6">
-        <Label htmlFor="nickname">怎么称呼您？（可不填）</Label>
+        <Label htmlFor="nickname">怎么称呼您？（必填，将作为署名）</Label>
         <Input
           id="nickname"
           value={state.shared.nickname}
@@ -516,7 +543,7 @@ export function FeedbackForm({ siteKey }: { siteKey?: string }) {
           </p>
         ) : (
           <p id="nickname-hint" className="mt-1.5 text-xs text-slate-500">
-            仅用于开发者辨认反馈，不会用于联系您。
+            将作为这条反馈的署名，不会用于联系您。
           </p>
         )}
       </div>
@@ -525,6 +552,39 @@ export function FeedbackForm({ siteKey }: { siteKey?: string }) {
       <p className="mt-6 text-xs leading-5 text-slate-500">
         提交时会自动附上您的设备信息（操作系统、浏览器、所在页面、提交时间），帮助我们更快定位问题，无需您填写。
       </p>
+
+      {/* 稀薄提交警示（v0.1.2 ③）：信息太少难以定位问题，请用户确认 */}
+      {sparseAsk ? (
+        <div
+          id="sparse-warning"
+          role="alertdialog"
+          aria-label="确认继续提交"
+          className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4"
+        >
+          <p className="text-sm leading-6 text-amber-900">
+            您还没有上传截图或日志，复现步骤等信息也空着，问题描述也比较短。这样
+            <strong>可能难以定位问题，修复效率会降低</strong>。确定要继续提交吗？
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => {
+                void doSubmit();
+              }}
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-amber-600 px-5 text-base font-medium text-white hover:bg-amber-700"
+            >
+              继续提交
+            </button>
+            <button
+              type="button"
+              onClick={() => setSparseAsk(false)}
+              className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-300 bg-white px-5 text-base text-slate-700 hover:bg-slate-100"
+            >
+              我再补充一下
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* 失败 toast（从提交中转页跳回时展示失败原因，8 秒自动消失） */}
       {toast ? (

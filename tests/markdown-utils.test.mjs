@@ -186,10 +186,10 @@ test("含截图/日志附件时：分区写入 s{n}/a{n} 相对路径，tier=det
     FIXED_NOW
   );
   assert.ok(
-    md.includes("![截图 1](feedback/assets/20260921-143025-a3f9kz/s1-屏幕截图.png)")
+    md.includes("![截图 1](issues/20260921-143025-a3f9kz/s1-屏幕截图.png)")
   );
   assert.ok(
-    md.includes("[debug.log](feedback/assets/20260921-143025-a3f9kz/a1-debug.log)")
+    md.includes("[debug.log](issues/20260921-143025-a3f9kz/a1-debug.log)")
   );
   assert.ok(md.includes('tier: "detailed"'));
   // 无附件时恒 basic

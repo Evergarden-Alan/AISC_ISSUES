@@ -276,14 +276,14 @@ interface TreeResponse {
 }
 
 /**
- * 两步非递归取 feedback/ 下全部 .md 路径（v0.1.1 M1-3，绕开 Contents 列目录约 1000 条截断）：
- * ① GET /git/trees/HEAD（HEAD 解析为默认分支，免新增分支环境变量）取根树；
- * ② 定位 path==="feedback" 且 type==="tree" 的子树 sha → GET /git/trees/{sha}（recursive=0 仅列该层）。
- * 返回 `feedback/{path}` 列表（子树条目 path 相对子树，需拼前缀）。
- * 刻意不用 ?recursive=1（防大仓库 truncated:true 与响应体积失控）；调用数恒为 2。
- * 失败（403/404/网络异常或 truncated）抛 GitHubApiError；根树无 feedback 目录 → 返回 []。
+ * 两步非递归取 issues/ 下全部条目目录名（v0.1.2 布局，绕开 Contents 列目录约 1000 条截断）：
+ * ① GET /git/trees/HEAD 取根树；② 定位 path==="issues" 的子树 sha → GET /git/trees/{sha}
+ * （recursive=0 仅列该层），过滤 type==="tree" 的条目目录（排除 _pending）。
+ * 刻意不用 ?recursive=1（防 truncated 与响应体积失控）；调用数恒为 2，
+ * 条目内 md（反馈.md/需求.md）由读取层 itemMdCandidates 依次探测。
+ * 失败（403/404/网络异常或 truncated）抛 GitHubApiError；根树无 issues 目录 → 返回 []。
  */
-export async function githubListFeedbackMdPaths(
+export async function githubListIssueFolders(
   revalidate?: number
 ): Promise<string[]> {
   const { owner, repo } = getConfig();
@@ -292,18 +292,18 @@ export async function githubListFeedbackMdPaths(
     revalidate ? { revalidate } : {}
   );
   if (!root.data || root.data.truncated) throw new GitHubApiError(root.data ? 500 : 404);
-  const feedbackTree = root.data.tree.find(
-    (e) => e.path === "feedback" && e.type === "tree"
+  const issuesTree = root.data.tree.find(
+    (e) => e.path === "issues" && e.type === "tree"
   );
-  if (!feedbackTree) return [];
+  if (!issuesTree) return [];
   const sub = await githubJson<TreeResponse>(
-    `/repos/${owner}/${repo}/git/trees/${feedbackTree.sha}`,
+    `/repos/${owner}/${repo}/git/trees/${issuesTree.sha}`,
     revalidate ? { revalidate } : {}
   );
   if (!sub.data || sub.data.truncated) throw new GitHubApiError(sub.data ? 500 : 404);
   return sub.data.tree
-    .filter((e) => e.type === "blob" && e.path.endsWith(".md"))
-    .map((e) => `feedback/${e.path}`);
+    .filter((e) => e.type === "tree" && e.path !== "_pending")
+    .map((e) => e.path);
 }
 
 export function sleep(ms: number): Promise<void> {

@@ -8,7 +8,7 @@ import {
 } from "@/lib/rate-limit";
 import { createFeedback, StaleRefError } from "@/lib/feedback";
 import { GitHubApiError } from "@/lib/github-client";
-import { makeId } from "@/lib/id";
+import { makeFolderId } from "@/lib/id";
 import { makeIssueToken } from "@/lib/token";
 import { sameOrigin, clientIp } from "@/lib/guards";
 import { turnstileEnabled, verifyTurnstileToken } from "@/lib/turnstile";
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   // ③ 蜜罐：非空 → 不写仓库、不计限流、返回 200 伪成功（合法格式假编号）
   if (typeof b.website === "string" && b.website.trim() !== "") {
-    return NextResponse.json({ ok: true, id: makeId(Date.now()) });
+    return NextResponse.json({ ok: true, id: makeFolderId("反馈", "匿名", Date.now()) });
   }
 
   // ④ 同 IP 限频：5 次/小时 + 60s 冷却

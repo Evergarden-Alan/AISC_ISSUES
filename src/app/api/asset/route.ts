@@ -4,18 +4,15 @@ import {
   assetIsInlineImage,
   isValidAssetPath,
 } from "@/lib/attachments";
-import { githubGetFile, githubGetFileBytes } from "@/lib/github-client";
-import { feedbackPath } from "@/lib/constants";
+import { githubGetFileBytes } from "@/lib/github-client";
 
-// GET /api/asset?path=feedback/assets/{id}/{文件名} —— 私有仓库资源代理（03 §3.3）
+// GET /api/asset?path=issues/{目录名}/{文件名} —— 私有仓库资源代理（v0.1.2 布局）
 // 大陆不可达 GitHub raw：一切图片/附件经本端点读取。
-// 白名单：仅 feedback/assets/{id}/ 内文件；拒绝 .. 与 _pending；hidden 条目 404。
+// 白名单：仅 issues/{目录}/ 内文件；拒绝 .. 与 _pending（多一段天然不匹配）。
 // 注：Origin 校验仅约束写端点（03 §3）——<img> 的 GET 不携带 Origin 头，
-// 且读端点已有路径白名单 + hidden 404 双重防护。
+// 且读端点已有路径白名单防护。
 
 export const runtime = "nodejs";
-
-const REVALIDATE_SECONDS = 300;
 
 function notFound() {
   return NextResponse.json({ ok: false, error: "附件不存在" }, { status: 404 });
@@ -28,13 +25,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 所属反馈 hidden ⇒ 404（02 §2.2 硬约定 3）
-    const id = path.split("/")[2];
-    const feedback = await githubGetFile(feedbackPath(id), REVALIDATE_SECONDS);
-    if (!feedback?.content) return notFound();
-    const head = feedback.content.slice(0, 2048);
-    if (/^status: "hidden"$/m.test(head)) return notFound();
-
     // raw 方式读字节（>1MB 文件 JSON 读不返回 content）；
     // 缓存由响应头 max-age=300 + immutable 承担
     const bytes = await githubGetFileBytes(path);

@@ -18,8 +18,8 @@ export function IdLookup() {
       router.push(`/issue/${v}`);
       return;
     }
-    // 非完整编号 → 列表关键词搜索（标题 / 编号模糊匹配，无死路）
-    router.push(`/issues?q=${encodeURIComponent(v)}`);
+    // 非完整目录名 → 首页列表关键词搜索（标题 / 目录名模糊匹配，无死路）
+    router.push(`/?q=${encodeURIComponent(v)}`);
   }
 
   return (

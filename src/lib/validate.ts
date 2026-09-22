@@ -161,7 +161,8 @@ function doValidate(body: unknown): {
     category === "feature" ? opt(body.workaround, LIMITS.workaround) : undefined;
 
   const nickname = str(body.nickname).trim();
-  if (nickname && !lenOk(nickname, LIMITS.nickname)) {
+  if (!nickname) throw new ValidationError("请填写称呼"); // v0.1.2：必填（作目录署名）
+  if (!lenOk(nickname, LIMITS.nickname)) {
     throw new ValidationError("称呼不能超过 20 字");
   }
 
@@ -184,7 +185,7 @@ function doValidate(body: unknown): {
     actual,
     scenario,
     workaround,
-    nickname: nickname || undefined,
+    nickname, // v0.1.2 必填
     screenshots: screenshots?.length ? screenshots : undefined,
     attachments: attachments?.length ? attachments : undefined,
     env,
