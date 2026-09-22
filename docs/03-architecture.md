@@ -264,7 +264,7 @@
 }
 ```
 
-**典型错误**：413 `"文件过大（图片上限 4MB / 日志上限 3MB）"`；415 `"不支持的文件格式"`；429 `"上传太频繁，请稍后再试"`（限流见第 7 节）。
+**典型错误**：413 `"文件过大（图片上限 4MB / 文件上限 20MB）"`；415 `"不支持的文件格式"`；429 `"上传太频繁，请稍后再试"`（限流见第 7 节）。
 
 ### 3.3 GET /api/asset
 
@@ -541,6 +541,8 @@ async function createFeedback(input):
 - **Root Directory**：单应用仓库，项目根即应用根，Vercel 项目设置保持默认（`.`），无需 monorepo 配置。
 - **无 cron**：v1 不配置任何 Vercel Cron / 定时任务——回信区靠 ISR 被动刷新（300s），无需后台轮询；`vercel.json` 整个文件不需要创建。
 - 构建命令 `next build`、Node 运行时 20.x（默认），无其他覆写。
+- **函数区域（上传提速关键）**：Vercel 项目 Settings → Functions → Function Region 选 **Hong Kong (hkg1)**——大陆用户上传链路从「客户端→美东→GitHub」缩短为「客户端→香港→GitHub」，延迟显著下降。
+- **大文件分片上传**：>3.5MB 的日志文件由客户端按 3.5MB 切片（uploadId/index/total），全部写完调 finalize 由服务端按序合并并做内容校验，绕开单请求 4.5MB 限制；合并/归位读取一律用 raw 方式（Contents API JSON 读 >1MB 文件不返回 content）。
 
 ---
 
