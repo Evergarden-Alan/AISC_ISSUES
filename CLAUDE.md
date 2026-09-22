@@ -1,6 +1,6 @@
 # CLAUDE.md — AI 编码代理工作约定
 
-本项目是 AISC_ISSUES 反馈站：Next.js App Router 应用，部署 Vercel，数据存私有 GitHub 反馈仓库（Contents API 读写）。动手前先读 docs/01~04 与 README。
+本项目是 AISC_ISSUES 反馈站：Next.js App Router 应用，部署 Vercel，数据存私有 GitHub 反馈仓库（Contents API 读写）。动手前先读 develop_wiki.md 与 README；v0.1.0 全套规格见 docs/archive/v0.1.0/，进行中文档在 docs/plans/。
 
 ## 冻结基线
 - 决策基线 v0.1.0 已冻结：任何文档、代码、讨论与其冲突时，一律以基线为准。
@@ -27,4 +27,4 @@ Next.js App Router + TypeScript strict + Tailwind CSS v4 + shadcn/ui + react-mar
 - 不采集任何联系方式（v0.1.0 移除 contact 字段与打码逻辑；仅保留选填 nickname ≤20 字，原文展示）；截图 EXIF 客户端剥离。
 
 ## 测试
-`node --test --experimental-strip-types`（package.json 封装为 npm run test）。验收项与测试映射见 docs/04-implementation.md §6。
+`node --test --experimental-strip-types`（package.json 封装为 npm run test）。验收项与测试映射见 docs/archive/v0.1.0/04-implementation.md §6。
