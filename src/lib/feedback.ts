@@ -49,7 +49,7 @@ async function relocateOne(
   folder: string
 ): Promise<void> {
   const base = ref.split("/").pop() ?? "file";
-  const pendingPath = `issues/${ref}`; // ref 以 _pending/ 开头 → issues/_pending/…
+  const pendingPath = `issues/${ref}`; // ref 以 _pending/ 开头 → PENDING_BASE 下（与上传落盘同一事实来源）
   const finalPath = `${itemDirPath(folder)}/${prefix}${index}-${base}`;
 
   // raw 读取（>1MB 文件 JSON 读不返回 content）；带重试应对写后读短暂 404

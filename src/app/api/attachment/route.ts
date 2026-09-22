@@ -15,6 +15,7 @@ import {
   sanitizeFileName,
   sniffImageType,
 } from "@/lib/attachments";
+import { PENDING_BASE } from "@/lib/constants";
 import {
   GitHubApiError,
   githubDeleteFile,
@@ -158,8 +159,8 @@ export async function POST(req: NextRequest) {
   const dir = uploadId || crypto.randomUUID();
   const ref = `_pending/${dir}/${safeName}`;
   const path = isChunk
-    ? `issues/_pending/${dir}/${safeName}.part${form.get("index")}`
-    : `feedback/assets/${ref}`;
+    ? `${PENDING_BASE}/${dir}/${safeName}.part${form.get("index")}`
+    : `${PENDING_BASE}/${dir}/${safeName}`;
   try {
     for (let attempt = 0; ; attempt++) {
       try {
@@ -233,7 +234,7 @@ async function finalize(form: FormData): Promise<NextResponse> {
 
     const ref = `_pending/${uploadId}/${safeName}`;
     await githubPutFileBytes(
-      `feedback/assets/${ref}`,
+      `${PENDING_BASE}/${uploadId}/${safeName}`,
       merged,
       `asset: 分片合并 ${safeName}`
     );

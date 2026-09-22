@@ -14,6 +14,7 @@ import {
   selectStalePendingDirs,
 } from "@/lib/pending-cleanup";
 import { regenerateIndex } from "@/lib/feedback";
+import { PENDING_BASE } from "@/lib/constants";
 
 // GET /api/cron/cleanup —— 每日自动任务（v0.1.2）：
 // ① 清理两处暂存区超龄孤儿：issues/_pending（现行）+ feedback/assets/_pending（v0.1.0 残留）；
@@ -115,7 +116,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ① 两处暂存区（现行 + 旧路径残留，后者清空后即恒为 no-op）
-  const r1 = await cleanupBase("issues/_pending");
+  const r1 = await cleanupBase(PENDING_BASE);
   const r2 = await cleanupBase("feedback/assets/_pending");
 
   // ② 顺带全量重建仓库根索引
