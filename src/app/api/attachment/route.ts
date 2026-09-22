@@ -17,8 +17,8 @@ import {
 import {
   GitHubApiError,
   githubDeleteFile,
-  githubGetFile,
-  githubGetFileRetry,
+  githubGetFileBytesRetry,
+  githubGetFileMeta,
   githubPutFileBytes,
 } from "@/lib/github-client";
 
@@ -186,13 +186,12 @@ async function finalize(form: FormData): Promise<NextResponse> {
     const parts: Buffer[] = [];
     let size = 0;
     for (let i = 0; i < total; i++) {
-      // 刚写完的分片可能有短暂读不到（GitHub 写后读不一致）：带重试取回
-      const part = await githubGetFileRetry(
+      // raw 读取（>1MB 文件 JSON 读不返回 content）；带重试应对写后读短暂 404
+      const b = await githubGetFileBytesRetry(
         `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`,
         { attempts: 5, delayMs: 800 }
       );
-      if (!part?.content) return fail("分片缺失，请重新上传该文件");
-      const b = Buffer.from(part.content, "base64");
+      if (!b) return fail("分片缺失，请重新上传该文件");
       size += b.byteLength;
       if (size > MAX_FILE_BYTES) return fail("文件过大（上限 20MB）", 413);
       parts.push(b);
@@ -222,19 +221,18 @@ async function finalize(form: FormData): Promise<NextResponse> {
       merged,
       `asset: 分片合并 ${safeName}`
     );
-    // 删除分片（失败不阻断：孤儿 v1 不清理，02 §7.2）
+    // 删除分片（object 方式取 sha，>1MB 分片也适用；失败不阻断：孤儿 v1 不清理）
     await Promise.all(
       Array.from({ length: total }, (_, i) =>
-        githubGetFile(`feedback/assets/_pending/${uploadId}/${safeName}.part${i}`)
-          .then((p) =>
-            p?.sha
-              ? githubDeleteFile(
-                  `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`,
-                  p.sha,
-                  "asset: 清理分片"
-                ).catch(() => undefined)
-              : undefined
-          )
+        (async () => {
+          try {
+            const p = `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`;
+            const meta = await githubGetFileMeta(p);
+            if (meta?.sha) await githubDeleteFile(p, meta.sha, "asset: 清理分片");
+          } catch {
+            // 忽略
+          }
+        })()
       )
     );
 

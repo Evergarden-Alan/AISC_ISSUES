@@ -4,7 +4,7 @@ import {
   assetIsInlineImage,
   isValidAssetPath,
 } from "@/lib/attachments";
-import { githubGetFile } from "@/lib/github-client";
+import { githubGetFile, githubGetFileBytes } from "@/lib/github-client";
 
 // GET /api/asset?path=feedback/assets/{id}/{文件名} —— 私有仓库资源代理（03 §3.3）
 // 大陆不可达 GitHub raw：一切图片/附件经本端点读取。
@@ -34,12 +34,12 @@ export async function GET(req: NextRequest) {
     const head = feedback.content.slice(0, 2048);
     if (/^status: "hidden"$/m.test(head)) return notFound();
 
-    const asset = await githubGetFile(path, REVALIDATE_SECONDS);
-    if (!asset?.content) return notFound();
-    const bytes = Buffer.from(asset.content, "base64");
-
+    // raw 方式读字节（>1MB 文件 JSON 读不返回 content）；
+    // 缓存由响应头 max-age=300 + immutable 承担
+    const bytes = await githubGetFileBytes(path);
+    if (!bytes) return notFound();
     const name = path.split("/").pop() ?? "file";
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes), {
       status: 200,
       headers: {
         "Content-Type": assetContentType(name),

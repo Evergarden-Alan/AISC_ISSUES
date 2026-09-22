@@ -112,6 +112,74 @@ export async function githubGetFileRetry(
   }
 }
 
+/**
+ * 以 raw 方式读文件字节。
+ * 关键：Contents API 以 JSON 方式读文件时，>1MB 的文件【不返回 content 字段】，
+ * 只有 raw accept 才能拿到任意大小文件的完整字节——附件读取必须走这里。
+ * 404 返回 null。
+ */
+export async function githubGetFileBytes(
+  filePath: string
+): Promise<Buffer | null> {
+  if (filePath.includes("..") || filePath.startsWith("/")) {
+    throw new GitHubApiError(400);
+  }
+  const { pat, owner, repo } = getConfig();
+  const res = await fetch(
+    `${API_BASE}/repos/${owner}/${repo}/contents/${filePath}`,
+    {
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: "application/vnd.github.raw",
+        "X-GitHub-Api-Version": API_VERSION,
+      },
+      cache: "no-store",
+    }
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new GitHubApiError(res.status);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** githubGetFileBytes 的带重试版（应对写后读短暂 404） */
+export async function githubGetFileBytesRetry(
+  filePath: string,
+  opts: { attempts?: number; delayMs?: number } = {}
+): Promise<Buffer | null> {
+  const attempts = opts.attempts ?? 4;
+  const delayMs = opts.delayMs ?? 700;
+  for (let i = 0; ; i++) {
+    const buf = await githubGetFileBytes(filePath);
+    if (buf || i >= attempts - 1) return buf;
+    await sleep(delayMs);
+  }
+}
+
+/** 读文件元数据（object 方式：任意大小 ≤100MB 都能拿到 sha，content 为空） */
+export async function githubGetFileMeta(
+  filePath: string
+): Promise<{ sha: string; size?: number } | null> {
+  if (filePath.includes("..") || filePath.startsWith("/")) {
+    throw new GitHubApiError(400);
+  }
+  const { pat, owner, repo } = getConfig();
+  const res = await fetch(
+    `${API_BASE}/repos/${owner}/${repo}/contents/${filePath}`,
+    {
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: "application/vnd.github.object",
+        "X-GitHub-Api-Version": API_VERSION,
+      },
+      cache: "no-store",
+    }
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new GitHubApiError(res.status);
+  const data = (await res.json()) as { sha?: string; size?: number };
+  return data.sha ? { sha: data.sha, size: data.size } : null;
+}
+
 export function decodeBase64Utf8(b64: string): string {
   return Buffer.from(b64, "base64").toString("utf-8");
 }

@@ -3,7 +3,8 @@ import {
   GitHubApiError,
   githubDeleteFile,
   githubGetFile,
-  githubGetFileRetry,
+  githubGetFileBytesRetry,
+  githubGetFileMeta,
   githubPutFile,
   githubPutFileBytes,
   sleep,
@@ -36,14 +37,16 @@ async function relocateOne(
   const pendingPath = `feedback/assets/${ref}`;
   const finalPath = `feedback/assets/${id}/${prefix}${index}-${base}`;
 
-  // 刚写完的 _pending 可能有短暂读不到（GitHub 写后读不一致）：带重试取回
-  const pending = await githubGetFileRetry(pendingPath, { attempts: 4, delayMs: 800 });
-  if (!pending?.content) throw new StaleRefError();
-  const bytes = Buffer.from(pending.content, "base64");
+  // raw 读取（>1MB 文件 JSON 读不返回 content）；带重试应对写后读短暂 404
+  const bytes = await githubGetFileBytesRetry(pendingPath, { attempts: 4, delayMs: 800 });
+  if (!bytes) throw new StaleRefError();
   await githubPutFileBytes(finalPath, bytes, `asset: ${finalPath}`);
-  // DELETE 失败不阻断（孤儿文件 v1 不清理，02 §7.2）
+  // DELETE 需要 sha：object 方式取元数据（>1MB 也拿得到）；失败留孤儿（v1 不清理，02 §7.2）
   try {
-    await githubDeleteFile(pendingPath, pending.sha ?? "", `asset: 归位 ${base}`);
+    const meta = await githubGetFileMeta(pendingPath);
+    if (meta?.sha) {
+      await githubDeleteFile(pendingPath, meta.sha, `asset: 归位 ${base}`);
+    }
   } catch {
     // 忽略
   }
