@@ -7,6 +7,7 @@
 ## 文档导航
 - develop_wiki.md 开发规约与快速开始（先读这个）
 - docs/todo.md 待改进 / 待开发清单
+- docs/devlog.md 开发日志（教训与经验，动手前先读「教训与经验」一节）
 - docs/plans/ 进行中版本文档（当前：v0.1.2 仓库布局目录化 + 索引）
 - docs/archive/ 已上线版本文档：
   - docs/archive/v0.1.0/ 产品规格 / 数据模型 / 架构 / 实施拆解 / 手动部署手册
