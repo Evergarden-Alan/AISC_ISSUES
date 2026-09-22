@@ -1,18 +1,28 @@
 # AISC_ISSUES 反馈站
 
-为软件 AISC_ISSUES 收集「问题反馈」与「功能需求」的纯简体中文站点——GitHub Issues 的平民化前端。目标用户在中国大陆、不懂编程；1 分钟提交，开发者会回复。部署于 Vercel，数据存于专用私有 GitHub 反馈仓库（与网站代码仓库分离）。
+为软件 AISC_ISSUES 收集「问题反馈」与「功能需求」的纯简体中文站点——GitHub Issues 的平民化前端。目标用户在中国大陆、不懂编程。部署于 Vercel，数据存于专用私有 GitHub 反馈仓库（与网站代码仓库分离）。
+
+线上地址：https://feedback.alanevergarden.xyz
 
 ## 文档导航
 - develop_wiki.md 开发规约与快速开始（先读这个）
-- todo.md 待改进 / 待开发清单
-- docs/plans/ 进行中版本文档（当前为空）
-- docs/archive/v0.1.0/ 已上线 v0.1.0 全套文档：
-  - 01-product.md 产品规格（双路径表单/首页 IA/状态文案/验收清单）
-  - 02-data-model.md frontmatter schema、正文分区模板、示例
-  - 03-architecture.md 目录树、API、lib 工具、环境变量与部署
-  - 04-implementation.md 里程碑任务分解、实现顺序、seed 与测试映射
-  - 05-manual-setup.md 手动操作手册（PAT/部署/域名，写给不熟悉的人）
+- docs/todo.md 待改进 / 待开发清单
+- docs/plans/ 进行中版本文档（当前：v0.1.2 仓库布局目录化 + 索引）
+- docs/archive/ 已上线版本文档：
+  - docs/archive/v0.1.0/ 产品规格 / 数据模型 / 架构 / 实施拆解 / 手动部署手册
+  - docs/archive/v0.1.1/ 上传进度 / 自动清理 / Trees 读取 / Turnstile / Upstash / 投票 / 文案与查询
 - CLAUDE.md AI 编码代理工作约定
+
+## 反馈仓库布局（v0.1.2 起）
+
+```
+aisc-issues-feedback（私有）
+├─ 索引.md                  ← 反馈/需求两表（序号|关键字|时间|当前进度），站点自动维护
+└─ issues/
+   └─ 20260922-概述-提出者/  ← 每条反馈一个目录：反馈.md（功能=需求.md）+ 附件同目录
+```
+
+开发者工作流：克隆仓库 → 看 `索引.md` 总览 → 处理完改对应 md 的 `status` 字段标记进度（站点 ≤5 分钟同步，索引自动跟上）。
 
 ## 快速开始
 
@@ -30,18 +40,20 @@
 | REPO_OWNER | 反馈仓库所有者 |
 | REPO_NAME | 反馈仓库名 |
 | FEEDBACK_TOKEN_SECRET | 专属详情页 token 签名密钥 |
-| ADMIN_TOKEN | 可选：管理页 /admin 登录令牌（不配则停用） |
+| CRON_SECRET | 每日自动任务鉴权（暂存清理 + 索引重建；不配则任务停用） |
+
+可选：NEXT_PUBLIC_SITE_URL（绑定域名后）、UPSTASH_*（Redis 精确限流，留空回退内存）、TURNSTILE_*（人机验证，默认关）。~~ADMIN_TOKEN~~ 已于 v0.1.2 废弃（管理页移除）。全部变量须同时配置到 Vercel 的 Production 与 Preview。
 
 可选：NEXT_PUBLIC_SITE_URL（绑定域名后）、UPSTASH_*（限频）、TURNSTILE_ENABLED（默认 false）。全部变量须同时配置到 Vercel 的 Production 与 Preview。
 
 测试：`npm run test`（= `node --test --experimental-strip-types`）。测试样例 seed 见 docs/archive/v0.1.0/04-implementation.md §7。
 
-## TODO-USER（人类待办汇总，完成前站点仅本地/预览可用，细节见 03 §9/§10）
+## 运维备忘
 
-1. 新建专用【私有】GitHub 反馈仓库（与网站代码仓库分离），默认分支 main。
-2. 创建 fine-grained PAT：仅勾选该仓库、仅权限 Contents: Read and write；有效期 90 天或不逾期（不逾期时记住泄漏应急：吊销→换新→更新环境变量，见 docs/archive/v0.1.0/05-manual-setup.md）；只存 Vercel 服务端环境变量，到期后在 Vercel 同步更新。
-3. 购买域名并将 DNS 解析指向 Vercel → Vercel 项目 Settings→Domains 绑定 → 配置 NEXT_PUBLIC_SITE_URL。
-4. Vercel 项目的 Production 与 Preview 环境均配置全部环境变量（含轮换后的新 PAT）。
+- 部署 = push 到 main，Vercel 自动构建（域名 feedback.alanevergarden.xyz，函数区域 hkg1 勿改回美区）。
+- 改环境变量后必须 Redeploy；令牌泄漏应急见 docs/archive/v0.1.0/05-manual-setup.md。
+- 每日自动任务（北京 03:00）：清理暂存区孤儿 + 重建 索引.md；手动触发：
+  `curl -H "Authorization: Bearer $CRON_SECRET" https://feedback.alanevergarden.xyz/api/cron/cleanup`
 
 ## 约束速览
 - 用户可见文案一律简体中文；无登录、无邮件通知（v1 非目标见 04 §1）。

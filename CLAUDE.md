@@ -7,6 +7,7 @@
 - frontmatter schema 与枚举不得擅改：product 固定 `"aisc-issues"`；type ∈ {bug, feature, ux, question, other}；severity ∈ {blocker, normal, low}（仅问题路径，功能路径默认 normal 不采集）；status ∈ {submitted, in-progress, replied, resolved, wontfix, duplicate, hidden}；tier ∈ {basic, detailed}（功能路径固定 basic）；`category` 为派生值（type==='feature' ? 'feature' : 'issue'），不写入 frontmatter；`nickname` 为可选字段（≤20 字；v0.1.0 起不采集任何联系方式，以 nickname 换入 contact）。
 - 状态中文映射按 category 双映射：in-progress=问题:处理中/功能:开发中；resolved=问题:已解决/功能:已上线；wontfix=问题:暂不处理/功能:暂不计划；submitted=已收到、replied=已回复、duplicate=重复、hidden=已隐藏（两路径同）。改动须用户明示确认。
 - 仓库布局（v0.1.2 演进）：`issues/{YYYYMMDD}-{概述≤20}-{提出者≤12}/` 每条一个目录，`反馈.md`（功能路径 `需求.md`）与附件同目录；仓库根 `索引.md` 由站点自动全量重建（每次提交 + 每日 cron），开发者直接改 md 的 status 即标记进度，无需管理后台（/admin 已移除，ADMIN_TOKEN 废弃）。
+- v0.1.1 演进（已随 v0.1.2 一并登记）：frontmatter 新增可选 `affects`（投票计数，YAML 裸数字，缺省 0，投票不改 updated_at）；`_pending` 暂存目录名日期化 `{YYYYMMDD-HHmmss}-{uuid4}`。
 - nickname 为必填（目录署名）；`id` 即目录名。
 - 若认为基线有误：不要擅改，在文档中用 `> ⚠️ 待确认：` 引用块标注。
 
