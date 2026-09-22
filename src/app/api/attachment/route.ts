@@ -18,6 +18,7 @@ import {
   GitHubApiError,
   githubDeleteFile,
   githubGetFile,
+  githubGetFileRetry,
   githubPutFileBytes,
 } from "@/lib/github-client";
 
@@ -185,8 +186,10 @@ async function finalize(form: FormData): Promise<NextResponse> {
     const parts: Buffer[] = [];
     let size = 0;
     for (let i = 0; i < total; i++) {
-      const part = await githubGetFile(
-        `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`
+      // 刚写完的分片可能有短暂读不到（GitHub 写后读不一致）：带重试取回
+      const part = await githubGetFileRetry(
+        `feedback/assets/_pending/${uploadId}/${safeName}.part${i}`,
+        { attempts: 5, delayMs: 800 }
       );
       if (!part?.content) return fail("分片缺失，请重新上传该文件");
       const b = Buffer.from(part.content, "base64");

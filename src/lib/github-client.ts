@@ -94,6 +94,24 @@ export async function githubGetFile(
   }
 }
 
+/**
+ * 带重试的读文件：GitHub Contents API 写后立即读存在短暂不一致（PUT 成功但
+ * GET 短暂 404），对「刚上传就要取回」的场景按固定间隔重试后再判缺失。
+ * 仅对 null（404）重试；其余错误立即抛出。
+ */
+export async function githubGetFileRetry(
+  filePath: string,
+  opts: { revalidate?: number; attempts?: number; delayMs?: number } = {}
+): Promise<ContentsItem | null> {
+  const attempts = opts.attempts ?? 4;
+  const delayMs = opts.delayMs ?? 700;
+  for (let i = 0; ; i++) {
+    const item = await githubGetFile(filePath, opts.revalidate);
+    if (item?.content || i >= attempts - 1) return item;
+    await sleep(delayMs);
+  }
+}
+
 export function decodeBase64Utf8(b64: string): string {
   return Buffer.from(b64, "base64").toString("utf-8");
 }

@@ -3,6 +3,7 @@ import {
   GitHubApiError,
   githubDeleteFile,
   githubGetFile,
+  githubGetFileRetry,
   githubPutFile,
   githubPutFileBytes,
   sleep,
@@ -35,13 +36,8 @@ async function relocateOne(
   const pendingPath = `feedback/assets/${ref}`;
   const finalPath = `feedback/assets/${id}/${prefix}${index}-${base}`;
 
-  // GitHub Contents API 偶发写入后短暂读不到：404 重试 3 次（800ms 间隔）再判过期
-  let pending = null;
-  for (let i = 0; i < 3; i++) {
-    pending = await githubGetFile(pendingPath);
-    if (pending?.content) break;
-    if (i < 2) await sleep(800);
-  }
+  // 刚写完的 _pending 可能有短暂读不到（GitHub 写后读不一致）：带重试取回
+  const pending = await githubGetFileRetry(pendingPath, { attempts: 4, delayMs: 800 });
   if (!pending?.content) throw new StaleRefError();
   const bytes = Buffer.from(pending.content, "base64");
   await githubPutFileBytes(finalPath, bytes, `asset: ${finalPath}`);
