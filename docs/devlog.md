@@ -55,6 +55,7 @@
 9. **lib 内部相对导入必须带 `.ts` 扩展名**（node --test 直跑 TS 的前提，Node type stripping 限制）；`.mjs` 测试文件里不能写 TS 注解。
 10. **Windows 本地测试中文内容**：python 写文件默认 GBK、curl 控制台传参编码不稳——测试数据一律 `encoding="utf-8"` 落文件再 `--data-binary` 发送。
 11. **路径迁移不要用字符串批量替换**——模板字面量的间接拼接（`` `feedback/assets/${ref}` ``）不会被字面量替换命中。目录/路径迁移应先收口为常量（如 PENDING_BASE），并配一个「守卫测试」扫描源码禁止旧字面量。
+12. **GitHub 对突发 content-creation 有次级限流（不计入 /rate_limit 的 core 配额）**——Vercel 共享出口 IP 批量写 GitHub 时可能整段短暂 500/403，几分钟自愈。判据：core 配额满血但所有 PUT 挂；处置：等 + 退避，勿盲目改代码。另：Contents API 的目录列表/读在大规模写删后存在边缘缓存不一致（幽灵条目、幽灵 404），以 git/trees 或延迟后的重试为准。
 
 ### 好实践（保持）
 
