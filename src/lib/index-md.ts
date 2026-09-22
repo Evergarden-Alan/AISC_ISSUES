@@ -1,6 +1,6 @@
 import { STATUS_LABELS, type StatusValue } from "./constants.ts";
 
-// 仓库根索引 索引.md 构建（v0.1.2）：反馈/需求两张表（序号/关键字/当前进度）。
+// 仓库根索引 索引.md 构建（v0.1.2）：反馈/需求两张表（序号/关键字/时间/当前进度）。
 // 每次新提交与每日 cron 全量重建，「当前进度」直接取各条目 md 的 status 中文映射。
 
 export interface IndexEntry {
@@ -19,14 +19,14 @@ function table(entries: IndexEntry[]): string {
   const rows = entries
     .slice()
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map(
-      (e, i) =>
-        `| ${i + 1} | ${cell(e.title)} | ${STATUS_LABELS[e.status][e.category]} |`
-    );
+    .map((e, i) => {
+      const time = e.createdAt.slice(0, 16).replace("T", " "); // "2026-09-22 18:19"（分钟粒度）
+      return `| ${i + 1} | ${cell(e.title)} | ${time} | ${STATUS_LABELS[e.status][e.category]} |`;
+    });
   return [
-    "| 序号 | 关键字 | 当前进度 |",
-    "|---|---|---|",
-    ...(rows.length > 0 ? rows : ["| - | 暂无 | - |"]),
+    "| 序号 | 关键字 | 时间 | 当前进度 |",
+    "|---|---|---|---|",
+    ...(rows.length > 0 ? rows : ["| - | 暂无 | - | - |"]),
   ].join("\n");
 }
 
