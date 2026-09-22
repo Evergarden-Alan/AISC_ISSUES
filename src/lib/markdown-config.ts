@@ -22,11 +22,12 @@ export const rehypeSanitizeWithSchema: [typeof rehypeSanitize, Schema] = [
 
 /**
  * 把 md 文本里的仓库相对附件路径改写为 /api/asset 代理地址
- * （02 §7.3：md 内一律写仓库相对路径，前端渲染时重写）
+ * （v0.1.2 布局：md 内写 issues/{目录}/{文件}，前端渲染时重写；
+ *  _pending 暂存路径不会被改写为可公开访问——白名单层同样拦截）
  */
 export function rewriteAssetUrls(text: string): string {
   return text.replace(
-    /feedback\/assets\/[^\s)\]]+/g,
+    /issues\/[^\s)\]]+/g,
     (m) => `/api/asset?path=${encodeURIComponent(m)}`
   );
 }
