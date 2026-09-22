@@ -32,12 +32,6 @@ export default async function Home() {
           <MessageSquarePlus aria-hidden />
           我要提反馈
         </Link>
-        <a
-          href="#lookup"
-          className="mt-3 block text-sm text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-        >
-          我有编号，查进度
-        </a>
       </section>
 
       {/* 轻统计（M3 已拍板口径：三个聚合数字） */}
@@ -66,11 +60,8 @@ export default async function Home() {
         </dl>
       </section>
 
-      {/* 按编号查询（M2+） */}
-      <section id="lookup" aria-labelledby="lookup-heading" className="scroll-mt-4 pb-10">
-        <h2 id="lookup-heading" className="mb-3 text-xl font-semibold">
-          按编号查询
-        </h2>
+      {/* 编号 / 关键词查询（M2+；v0.1.1 M5 模糊查询） */}
+      <section aria-label="反馈查询" className="pb-10">
         <IdLookup />
       </section>
 

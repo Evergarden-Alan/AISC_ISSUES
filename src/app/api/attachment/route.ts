@@ -91,7 +91,10 @@ export async function POST(req: NextRequest) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const isChunk = !!uploadId && kind === "file";
+  // 分片请求必带 index/total 字段；v0.1.1 起直传也携带 uploadId（日期化目录），
+  // 故不能以 uploadId 有无判定分片（否则 ≤3.5MB 直传被误判 → 「分片信息不正确」）
+  const isChunk =
+    !!uploadId && kind === "file" && form.has("index") && form.has("total");
   // 分片模式的原始文件名以 name 字段为准（file.name 已带 .part{i} 后缀）
   const originalName =
     isChunk && typeof form.get("name") === "string" && form.get("name")
