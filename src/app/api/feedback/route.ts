@@ -6,6 +6,7 @@ import { GitHubApiError } from "@/lib/github-client";
 import { makeId } from "@/lib/id";
 import { makeIssueToken } from "@/lib/token";
 import { sameOrigin, clientIp } from "@/lib/guards";
+import { turnstileEnabled, verifyTurnstileToken } from "@/lib/turnstile";
 
 // POST /api/feedback —— 薄控制器（03 §3.1）：校验 → 调 lib → 组装响应。
 // 安全：Origin 同源校验；蜜罐静默丢弃；同 IP 限频；幂等键；服务端白名单。
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ④ 同 IP 限频：5 次/小时 + 60s 冷却
-  const verdict = hitRateLimit(clientIp(req));
+  const verdict = await hitRateLimit(clientIp(req));
   if (!verdict.allowed) {
     return fail(
       verdict.reason === "cooldown"
@@ -53,12 +54,22 @@ export async function POST(req: NextRequest) {
   if (!headerKey || headerKey !== bodyKey) {
     return fail("提交标识缺失，请刷新页面重试");
   }
-  const idem = checkIdempotency(bodyKey);
+  const idem = await checkIdempotency(bodyKey);
   if (idem.kind === "in-flight") {
     return fail("正在提交，请稍候…", 409);
   }
   if (idem.kind === "done") {
     return NextResponse.json(idem.result);
+  }
+
+  // ⑤.5 Turnstile 人机验证（v0.1.1 M2-1，默认关；开启时缺 token 降级放行并告警）
+  if (turnstileEnabled()) {
+    const tsTok = typeof b.turnstileToken === "string" ? b.turnstileToken : "";
+    if (!tsTok) {
+      console.warn("[turnstile] 缺 token 降级放行");
+    } else if (!(await verifyTurnstileToken(tsTok, clientIp(req)))) {
+      return fail("人机验证未通过，请刷新页面重试");
+    }
   }
 
   // ⑥ 字段白名单/枚举/长度校验（按路径区分）
@@ -71,7 +82,7 @@ export async function POST(req: NextRequest) {
     const token = makeIssueToken(id);
     const url = `/issue/${id}?t=${token}`;
     const result = { ok: true as const, id, token, url };
-    finishIdempotency(bodyKey, result);
+    await finishIdempotency(bodyKey, result);
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof StaleRefError) {

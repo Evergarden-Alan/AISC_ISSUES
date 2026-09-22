@@ -7,7 +7,7 @@ import { uploadAttachment, type UploadedRef } from "@/lib/upload-client";
 
 // 截图上传（01 §4.1 字段 5）：≤10 张、jpg/png/webp、客户端压缩 ≤4MB + canvas 剥 EXIF。
 // 微信内置浏览器多选不稳：按「可多次点击累计」设计，multiple 保留为渐进增强。
-// 并发 2 上传提速；上传期间通过 onUploadingChange 通知表单禁用提交。
+// 并发 2 上传提速；v0.1.1：批次整体进度（虚线 tile 显示百分比，title 悬停全量文案）。
 
 const MAX_SHOTS = 10;
 
@@ -15,12 +15,17 @@ export function ScreenshotUploader({
   value,
   onChange,
   onUploadingChange,
+  getTurnstileToken,
 }: {
   value: UploadedRef[];
   onChange: (v: UploadedRef[]) => void;
   onUploadingChange?: (uploading: boolean) => void;
+  getTurnstileToken?: () => Promise<string>;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [compressing, setCompressing] = useState(0);
+  const [batchPercent, setBatchPercent] = useState(0);
+  const [batchTitle, setBatchTitle] = useState("");
   const [error, setError] = useState("");
   const [urls, setUrls] = useState<Record<string, string>>({});
   const inputRef = useRef<HTMLInputElement>(null);
@@ -41,25 +46,60 @@ export function ScreenshotUploader({
     const next = [...value];
     const picked = Array.from(list).slice(0, room);
     const failed: string[] = [];
-    // 并发 2 压缩+上传
+    const percents = new Array<number>(picked.length).fill(0);
+    let doneCount = 0;
+
+    const report = () => {
+      const sum = percents.reduce((a, b) => a + b, 0);
+      const percent = picked.length
+        ? Math.min(100, Math.floor(sum / picked.length))
+        : 100;
+      setBatchPercent(percent);
+      setBatchTitle(`已上传 ${doneCount}/${picked.length} 张`);
+    };
+    report();
+
+    // 并发 2 压缩+上传；percents 按选中顺序归属（shift 原子取号）
     const queue = [...picked];
     const worker = async () => {
       for (;;) {
+        const idx = picked.length - queue.length;
         const file = queue.shift();
         if (!file) return;
         try {
           if (!/\.(jpe?g|png|webp)$/i.test(file.name)) {
             failed.push(`${file.name}：格式不支持`);
+            percents[idx] = 100;
+            doneCount += 1;
+            report();
             continue;
           }
+          setCompressing((c) => c + 1);
           const blob = await compressImageToJpeg(file);
+          setCompressing((c) => Math.max(0, c - 1));
           const base = file.name.replace(/\.[^.]+$/, "") || "截图";
           const jpg = new File([blob], `${base}.jpg`, { type: "image/jpeg" });
-          const uploaded = await uploadAttachment(jpg, "image");
+          const token = getTurnstileToken ? await getTurnstileToken() : "";
+          const uploaded = await uploadAttachment(
+            jpg,
+            "image",
+            (p) => {
+              percents[idx] = p.percent;
+              report();
+            },
+            token
+          );
+          percents[idx] = 100;
+          doneCount += 1;
+          report();
           next.push(uploaded);
           setUrls((u) => ({ ...u, [uploaded.ref]: URL.createObjectURL(blob) }));
           onChange([...next]);
         } catch (e) {
+          setCompressing((c) => Math.max(0, c - 1));
+          percents[idx] = 100;
+          doneCount += 1;
+          report();
           failed.push(`${file.name}：${e instanceof Error ? e.message : "上传失败"}`);
         }
       }
@@ -67,6 +107,8 @@ export function ScreenshotUploader({
     await Promise.all([worker(), worker()]);
     if (failed.length) setError(failed[0]);
     setUploadingBoth(false);
+    setBatchPercent(0);
+    setBatchTitle("");
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -110,12 +152,17 @@ export function ScreenshotUploader({
         ))}
         {value.length < MAX_SHOTS ? (
           <label
+            title={uploading ? batchTitle : undefined}
             className={`flex size-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 text-xs text-slate-500 hover:border-blue-400 hover:text-blue-600 ${
               uploading ? "pointer-events-none opacity-60" : ""
             }`}
           >
             <ImagePlus aria-hidden className="size-5" />
-            {uploading ? "上传中…" : "添加截图"}
+            {compressing > 0
+              ? "处理图片中…"
+              : uploading
+                ? `上传中 ${batchPercent}%`
+                : "添加截图"}
             <input
               ref={inputRef}
               type="file"

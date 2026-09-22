@@ -4,15 +4,22 @@ import {
   getConfig,
   githubGetFile,
   githubListDir,
+  githubListFeedbackMdPaths,
+  GitHubApiError,
 } from "./github-client.ts";
 import {
+  affectsOf,
   compareByUpdatedAt,
   extractLatestReply,
   extractReplyRounds,
   parseFeedback,
   splitSections,
 } from "./markdown-utils.ts";
-import { type StatusValue, type TypeValue } from "../lib/constants.ts";
+import {
+  feedbackPath,
+  type StatusValue,
+  type TypeValue,
+} from "../lib/constants.ts";
 import { deriveCategory, type Category, type FeedbackFrontmatter, type ReplyItem } from "../types/feedback.ts";
 
 // 服务端读层（03 §5）：Server Component / 管理路由专用，ISR revalidate=300。
@@ -46,12 +53,14 @@ export interface ListItem {
   createdAt: string;
   updatedAt: string;
   excerpt: string;
+  affects: number; // v0.1.1：投票计数（列表 UI 暂不展示，数据层预留）
 }
 
 interface SummaryItem extends ListItem {
   hidden: boolean;
   archived: boolean;
   firstReplyAt: string | null; // 首轮回复时刻 "2026-09-19 16:40"
+  lastReplyText: string; // 最后一轮回复原文（仅管理页「编辑回复」回填用）
 }
 
 /** "2026-09-19 16:40" → 可比较的 ISO（+08:00） */
@@ -62,11 +71,21 @@ function minuteToIso(minute: string): string {
 async function fetchSummaries(includeHidden: boolean): Promise<SummaryItem[]> {
   getConfig(); // 校验环境变量；实际鉴权在 github-client 内部
 
-  const entries = await githubListDir("feedback", REVALIDATE_SECONDS);
-  if (!entries) return [];
-  const files = entries
-    .filter((e) => e.type === "file" && e.name.endsWith(".md"))
-    .map((e) => `feedback/${e.name}`);
+  // v0.1.1 M1-3：Git Trees API 枚举（解除 Contents 列目录约 1000 条截断）；
+  // 失败（含 truncated）回退原 Contents 列目录，行为与 v0.1.0 一致
+  let files: string[];
+  try {
+    files = await githubListFeedbackMdPaths(REVALIDATE_SECONDS);
+  } catch (e) {
+    console.error(
+      "[data] Trees API 读取失败，回退 Contents 列目录：",
+      e instanceof GitHubApiError ? e.status : e
+    );
+    const entries = await githubListDir("feedback", REVALIDATE_SECONDS);
+    files = (entries ?? [])
+      .filter((x) => x.type === "file" && x.name.endsWith(".md"))
+      .map((x) => `feedback/${x.name}`);
+  }
 
   const limit = pLimit(8); // 并发控制防限流（认证配额 5000/h）
   const results = await Promise.all(
@@ -92,9 +111,12 @@ async function fetchSummaries(includeHidden: boolean): Promise<SummaryItem[]> {
           createdAt: fm.created_at,
           updatedAt: fm.updated_at,
           excerpt: hasReply ? excerpt : "",
+          affects: affectsOf(fm),
           hidden,
           archived,
           firstReplyAt: rounds.length > 0 ? rounds[0].time : null,
+          lastReplyText:
+            rounds.length > 0 ? rounds[rounds.length - 1].text : "",
         };
       })
     )
@@ -158,7 +180,15 @@ export async function getIssuesForList(): Promise<ListItem[]> {
     const all = await fetchSummaries(false);
     return all
       .sort(compareByUpdatedAt)
-      .map(({ hidden: _h, archived: _a, firstReplyAt: _f, ...item }) => item);
+      .map(
+        ({
+          hidden: _h,
+          archived: _a,
+          firstReplyAt: _f,
+          lastReplyText: _r,
+          ...item
+        }) => item
+      );
   } catch (e) {
     console.error("[data] 读取列表失败：", e);
     return [];
@@ -194,7 +224,7 @@ export interface IssueDetail {
 
 export async function getIssue(id: string): Promise<IssueDetailResult> {
   try {
-    const file = await githubGetFile(`feedback/${id}.md`, REVALIDATE_SECONDS);
+    const file = await githubGetFile(feedbackPath(id), REVALIDATE_SECONDS);
     if (!file?.content) return null;
     const parsed = parseFeedback(decodeBase64Utf8(file.content));
     if (!parsed) return null;

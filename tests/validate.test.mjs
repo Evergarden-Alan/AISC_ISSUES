@@ -139,6 +139,21 @@ test("引用校验：非法 ref / 超数量 / 扩展名不符均拒绝", () => {
   assert.equal(r4.ok, true);
 });
 
+test("v0.1.1 新格式 _pending 引用（日期化目录）通过；turnstileToken 白名单", () => {
+  const datedRef = "_pending/20260922-143005-3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/a.log";
+  const r = validateSubmission({
+    ...ISSUE_OK,
+    attachments: [{ ref: datedRef, originalName: "a.log" }],
+  });
+  assert.equal(r.ok, true);
+  // turnstileToken：可选字符串 ≤2048 通过（默认关闭场景常缺省）
+  const r2 = validateSubmission({ ...ISSUE_OK, turnstileToken: "x".repeat(2048) });
+  assert.equal(r2.ok, true);
+  const r3 = validateSubmission({ ...ISSUE_OK, turnstileToken: "x".repeat(2049) });
+  assert.equal(r3.ok, false);
+  if (!r3.ok) assert.equal(r3.error, "提交内容格式不正确");
+});
+
 test("白名单外字段 → 整体 400", () => {
   const r = validateSubmission({ ...ISSUE_OK, admin: true });
   assert.equal(r.ok, false);

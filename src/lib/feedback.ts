@@ -10,6 +10,7 @@ import {
   sleep,
 } from "./github-client.ts";
 import { renderFeedbackMarkdown } from "./markdown-utils.ts";
+import { assetsPath, feedbackPath } from "./constants.ts";
 import { makeId } from "./id.ts";
 import type { PendingRef } from "./validate.ts";
 import type { ValidatedFeedback } from "../types/feedback.ts";
@@ -34,8 +35,8 @@ async function relocateOne(
   id: string
 ): Promise<void> {
   const base = ref.split("/").pop() ?? "file";
-  const pendingPath = `feedback/assets/${ref}`;
-  const finalPath = `feedback/assets/${id}/${prefix}${index}-${base}`;
+  const pendingPath = `feedback/assets/${ref}`; // _pending 路径保持字面量（v0.1.1 收口约定）
+  const finalPath = `${assetsPath(id)}/${prefix}${index}-${base}`;
 
   // raw 读取（>1MB 文件 JSON 读不返回 content）；带重试应对写后读短暂 404
   const bytes = await githubGetFileBytesRetry(pendingPath, { attempts: 4, delayMs: 800 });
@@ -76,7 +77,7 @@ export async function createFeedback(input: ValidatedFeedback): Promise<string> 
     const id = makeId(nowMs);
     try {
       // 预检：新建必须 404（02 §5.2 预检层）
-      const existing = await githubGetFile(`feedback/${id}.md`);
+      const existing = await githubGetFile(feedbackPath(id));
       if (existing) throw new GitHubApiError(422);
 
       // 附件归位（先归位、后写 md；任一失败整体失败）
@@ -89,7 +90,7 @@ export async function createFeedback(input: ValidatedFeedback): Promise<string> 
 
       const md = renderFeedbackMarkdown(input, id, nowMs);
       await githubPutFile(
-        `feedback/${id}.md`,
+        feedbackPath(id),
         md,
         `feedback: ${id} (${input.category}/${input.type})`
       );

@@ -1,122 +1,272 @@
-// 限流与幂等（03 §6.1、§7）：函数内存近似实现，Upstash 接口预留（v1 不接）。
-// Serverless 多实例下为尽力而为——与蜜罐 + 字段白名单叠加后误重复/滥用概率可忽略。
+// 限流与幂等（v0.1.1 双后端）：UPSTASH_REDIS_REST_URL/TOKEN 均非空 → Redis 精确计数
+// （裸 fetch REST pipeline，零新增依赖）；未配置或故障 → 函数内存实现（v0.1.0 行为）。
+// 可用性优先：Redis 任何异常降级内存并告警——宁松勿断。
 
 const HOUR_MS = 3_600_000;
-const MAX_PER_HOUR = 5; // 同 IP 5 次/小时
-const COOLDOWN_MS = 60_000; // 两次提交间隔 ≥60s
-const MAX_MAP_SIZE = 10_000; // 防内存膨胀：超限整体重置
-
-interface RateEntry {
-  count: number;
-  windowStart: number;
-  lastAt: number;
-}
-
-const rateMap = new Map<string, RateEntry>();
+const COOLDOWN_MS = 60_000;
+const MAX_PER_HOUR = 5; // 同 IP 提交 5 次/小时
+const UPLOAD_MAX_PER_HOUR = 20; // 附件上传 20 次/小时（无冷却）
+const VOTE_MAX_PER_HOUR = 1; // 同（IP, 反馈）投票 1 次/小时
+const IDEMPOTENCY_TTL_MS = 15 * 60_000;
+const REDIS_TIMEOUT_MS = 500;
 
 export type RateVerdict =
   | { allowed: true }
   | { allowed: false; reason: "cooldown" | "hour" };
-
-/** 惰性清理：写入时顺带删除过期项 */
-function sweep(now: number): void {
-  if (rateMap.size < MAX_MAP_SIZE / 2) return;
-  if (rateMap.size >= MAX_MAP_SIZE) {
-    rateMap.clear();
-    return;
-  }
-  for (const [k, e] of rateMap) {
-    if (now - e.windowStart > HOUR_MS) rateMap.delete(k);
-  }
-}
-
-export function hitRateLimit(ip: string, now: number = Date.now()): RateVerdict {
-  sweep(now);
-  const entry = rateMap.get(ip);
-
-  if (entry) {
-    if (now - entry.lastAt < COOLDOWN_MS) return { allowed: false, reason: "cooldown" };
-    if (now - entry.windowStart <= HOUR_MS && entry.count >= MAX_PER_HOUR) {
-      return { allowed: false, reason: "hour" };
-    }
-    if (now - entry.windowStart > HOUR_MS) {
-      entry.count = 0;
-      entry.windowStart = now;
-    }
-    entry.count += 1;
-    entry.lastAt = now;
-    return { allowed: true };
-  }
-
-  rateMap.set(ip, { count: 1, windowStart: now, lastAt: now });
-  return { allowed: true };
-}
-
-// ===== 附件上传限频（03 §7.1：同 IP 20 次/小时，无冷却）=====
-
-const UPLOAD_MAX_PER_HOUR = 20;
-
-interface UploadEntry {
-  count: number;
-  windowStart: number;
-}
-
-const uploadMap = new Map<string, UploadEntry>();
-
-export function hitUploadLimit(ip: string, now: number = Date.now()): boolean {
-  if (uploadMap.size >= MAX_MAP_SIZE) uploadMap.clear();
-  const key = `up:${ip}`;
-  const entry = uploadMap.get(key);
-  if (entry) {
-    if (now - entry.windowStart > HOUR_MS) {
-      entry.count = 0;
-      entry.windowStart = now;
-    }
-    if (entry.count >= UPLOAD_MAX_PER_HOUR) return false;
-    entry.count += 1;
-    return true;
-  }
-  uploadMap.set(key, { count: 1, windowStart: now });
-  return true;
-}
-
-// ===== 幂等键（防重复提交，03 §6.1）=====
-
-const IDEMPOTENCY_TTL_MS = 15 * 60_000;
-
-interface IdemRecord {
-  state: "in-flight" | "done";
-  result?: { ok: true; id: string };
-  expiresAt: number;
-}
-
-const idemMap = new Map<string, IdemRecord>();
 
 export type IdemVerdict =
   | { kind: "new" }
   | { kind: "in-flight" }
   | { kind: "done"; result: { ok: true; id: string } };
 
-export function checkIdempotency(key: string, now: number = Date.now()): IdemVerdict {
-  const rec = idemMap.get(key);
-  if (!rec || now > rec.expiresAt) {
-    idemMap.set(key, { state: "in-flight", expiresAt: now + IDEMPOTENCY_TTL_MS });
-    return { kind: "new" };
+// ===== 后端接口（测试可注入；now 仅内存后端使用）=====
+
+export interface CounterBackend {
+  /** 窗口计数：INCR key（首次设 TTL windowMs）。返回窗口内当前计数 */
+  incr(key: string, windowMs: number, now?: number): Promise<number>;
+  /** 冷却闸门：SET key 1 PX windowMs NX。置入成功（此前不存在）→ true */
+  setIfAbsent(key: string, windowMs: number, now?: number): Promise<boolean>;
+}
+
+export interface IdemBackend {
+  setIfAbsent(key: string, value: string, ttlMs: number, now?: number): Promise<boolean>;
+  get(key: string, now?: number): Promise<string | null>;
+  set(key: string, value: string, ttlMs: number, now?: number): Promise<void>;
+}
+
+// ===== 判定逻辑（纯编排，键名与阈值集中在这一层）=====
+
+export interface RateLimiter {
+  hitRateLimit(ip: string, now?: number): Promise<RateVerdict>;
+  hitUploadLimit(ip: string, now?: number): Promise<boolean>;
+  hitVoteLimit(ip: string, id: string, now?: number): Promise<boolean>;
+  checkIdempotency(key: string, now?: number): Promise<IdemVerdict>;
+  finishIdempotency(
+    key: string,
+    result: { ok: true; id: string },
+    now?: number
+  ): Promise<void>;
+}
+
+export function createRateLimiter(
+  counter: CounterBackend,
+  idem: IdemBackend
+): RateLimiter {
+  return {
+    async hitRateLimit(ip, now) {
+      const cdOk = await counter.setIfAbsent(`rl:cd:${ip}`, COOLDOWN_MS, now);
+      if (!cdOk) return { allowed: false, reason: "cooldown" };
+      const n = await counter.incr(`rl:${ip}`, HOUR_MS, now);
+      if (n > MAX_PER_HOUR) return { allowed: false, reason: "hour" };
+      return { allowed: true };
+    },
+    async hitUploadLimit(ip, now) {
+      const n = await counter.incr(`rl:up:${ip}`, HOUR_MS, now);
+      return n <= UPLOAD_MAX_PER_HOUR;
+    },
+    async hitVoteLimit(ip, id, now) {
+      const n = await counter.incr(`vote:${ip}:${id}`, HOUR_MS, now);
+      return n <= VOTE_MAX_PER_HOUR;
+    },
+    async checkIdempotency(key, now) {
+      const k = `idem:${key}`;
+      const fresh = await idem.setIfAbsent(
+        k,
+        JSON.stringify({ state: "in-flight" }),
+        IDEMPOTENCY_TTL_MS,
+        now
+      );
+      if (fresh) return { kind: "new" };
+      const raw = await idem.get(k, now);
+      if (!raw) return { kind: "new" }; // 恰好过期：按新键处理
+      try {
+        const rec = JSON.parse(raw) as {
+          state?: string;
+          result?: { ok: true; id: string };
+        };
+        if (rec.state === "done" && rec.result) {
+          return { kind: "done", result: rec.result };
+        }
+        return { kind: "in-flight" };
+      } catch {
+        return { kind: "in-flight" };
+      }
+    },
+    async finishIdempotency(key, result, now) {
+      await idem.set(
+        `idem:${key}`,
+        JSON.stringify({ state: "done", result }),
+        IDEMPOTENCY_TTL_MS,
+        now
+      );
+    },
+  };
+}
+
+// ===== 内存后端（v0.1.0 行为；单实例近似计数）=====
+
+const MAX_MAP_SIZE = 10_000; // 防内存膨胀：超限整体重置
+
+const memWindows = new Map<string, { count: number; windowStart: number }>();
+const memKv = new Map<string, { value: string; expiresAt: number }>();
+
+function memSweep(now: number): void {
+  if (memWindows.size + memKv.size < MAX_MAP_SIZE / 2) return;
+  if (memWindows.size + memKv.size >= MAX_MAP_SIZE) {
+    memWindows.clear();
+    memKv.clear();
+    return;
   }
-  if (rec.state === "in-flight") return { kind: "in-flight" };
-  return { kind: "done", result: rec.result! };
+  for (const [k, e] of memWindows) {
+    if (now - e.windowStart > 2 * HOUR_MS) memWindows.delete(k);
+  }
+  for (const [k, e] of memKv) {
+    if (e.expiresAt <= now) memKv.delete(k);
+  }
+}
+
+const memoryCounter: CounterBackend = {
+  async incr(key, windowMs, now = Date.now()) {
+    memSweep(now);
+    const e = memWindows.get(key);
+    if (!e || now - e.windowStart > windowMs) {
+      memWindows.set(key, { count: 1, windowStart: now });
+      return 1;
+    }
+    e.count += 1;
+    return e.count;
+  },
+  async setIfAbsent(key, windowMs, now = Date.now()) {
+    const e = memKv.get(key);
+    if (e && e.expiresAt > now) return false;
+    memKv.set(key, { value: "1", expiresAt: now + windowMs });
+    return true;
+  },
+};
+
+const memoryIdem: IdemBackend = {
+  async setIfAbsent(key, value, ttlMs, now = Date.now()) {
+    const e = memKv.get(key);
+    if (e && e.expiresAt > now) return false;
+    memKv.set(key, { value, expiresAt: now + ttlMs });
+    return true;
+  },
+  async get(key, now = Date.now()) {
+    const e = memKv.get(key);
+    if (!e) return null;
+    if (e.expiresAt <= now) {
+      memKv.delete(key);
+      return null;
+    }
+    return e.value;
+  },
+  async set(key, value, ttlMs, now = Date.now()) {
+    memKv.set(key, { value, expiresAt: now + ttlMs });
+  },
+};
+
+// ===== Redis 后端（Upstash REST pipeline；接口报错一律抛出由上层降级）=====
+
+export function upstashConfigured(): boolean {
+  return !!(
+    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+  );
+}
+
+/** 单次 POST /pipeline 发送多条命令；返回 [error, result] 对中的 result 列表 */
+export async function upstashPipeline(cmds: unknown[][]): Promise<unknown[]> {
+  const url = process.env.UPSTASH_REDIS_REST_URL!.replace(/\/+$/, "");
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN!;
+  const res = await fetch(`${url}/pipeline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(cmds),
+    signal: AbortSignal.timeout(REDIS_TIMEOUT_MS),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`upstash http ${res.status}`);
+  const data = (await res.json()) as [unknown, unknown][];
+  for (const [err] of data) {
+    if (err) throw new Error("upstash command error");
+  }
+  return data.map(([, r]) => r);
+}
+
+const redisCounter: CounterBackend = {
+  async incr(key, windowMs) {
+    const out = await upstashPipeline([
+      ["INCR", key],
+      ["PEXPIRE", key, String(windowMs), "NX"],
+    ]);
+    return Number(out[0]) || 0;
+  },
+  async setIfAbsent(key, windowMs) {
+    const out = await upstashPipeline([
+      ["SET", key, "1", "PX", String(windowMs), "NX"],
+    ]);
+    return out[0] === "OK";
+  },
+};
+
+const redisIdem: IdemBackend = {
+  async setIfAbsent(key, value, ttlMs) {
+    const out = await upstashPipeline([
+      ["SET", key, value, "PX", String(ttlMs), "NX"],
+    ]);
+    return out[0] === "OK";
+  },
+  async get(key) {
+    const out = await upstashPipeline([["GET", key]]);
+    const v = out[0];
+    return typeof v === "string" ? v : null;
+  },
+  async set(key, value, ttlMs) {
+    await upstashPipeline([["SET", key, value, "PX", String(ttlMs)]]);
+  },
+};
+
+// ===== 对外入口：按配置选后端，Redis 故障逐次降级内存 =====
+
+const memoryLimiter = createRateLimiter(memoryCounter, memoryIdem);
+const redisLimiter = createRateLimiter(redisCounter, redisIdem);
+
+async function run<T>(fn: (l: RateLimiter) => Promise<T>): Promise<T> {
+  if (upstashConfigured()) {
+    try {
+      return await fn(redisLimiter);
+    } catch (e) {
+      console.error(
+        "[rate-limit] Redis 不可用，本次降级内存计数：",
+        e instanceof Error ? e.message : e
+      );
+    }
+  }
+  return fn(memoryLimiter);
+}
+
+export function hitRateLimit(ip: string, now?: number): Promise<RateVerdict> {
+  return run((l) => l.hitRateLimit(ip, now));
+}
+
+export function hitUploadLimit(ip: string, now?: number): Promise<boolean> {
+  return run((l) => l.hitUploadLimit(ip, now));
+}
+
+export function hitVoteLimit(ip: string, id: string, now?: number): Promise<boolean> {
+  return run((l) => l.hitVoteLimit(ip, id, now));
+}
+
+export function checkIdempotency(key: string, now?: number): Promise<IdemVerdict> {
+  return run((l) => l.checkIdempotency(key, now));
 }
 
 export function finishIdempotency(
   key: string,
   result: { ok: true; id: string },
-  now: number = Date.now()
-): void {
-  const rec = idemMap.get(key);
-  if (rec) {
-    rec.state = "done";
-    rec.result = result;
-  } else {
-    idemMap.set(key, { state: "done", result, expiresAt: now + IDEMPOTENCY_TTL_MS });
-  }
+  now?: number
+): Promise<void> {
+  return run((l) => l.finishIdempotency(key, result, now));
 }

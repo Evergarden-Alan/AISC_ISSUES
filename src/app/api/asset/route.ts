@@ -5,6 +5,7 @@ import {
   isValidAssetPath,
 } from "@/lib/attachments";
 import { githubGetFile, githubGetFileBytes } from "@/lib/github-client";
+import { feedbackPath } from "@/lib/constants";
 
 // GET /api/asset?path=feedback/assets/{id}/{文件名} —— 私有仓库资源代理（03 §3.3）
 // 大陆不可达 GitHub raw：一切图片/附件经本端点读取。
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   try {
     // 所属反馈 hidden ⇒ 404（02 §2.2 硬约定 3）
     const id = path.split("/")[2];
-    const feedback = await githubGetFile(`feedback/${id}.md`, REVALIDATE_SECONDS);
+    const feedback = await githubGetFile(feedbackPath(id), REVALIDATE_SECONDS);
     if (!feedback?.content) return notFound();
     const head = feedback.content.slice(0, 2048);
     if (/^status: "hidden"$/m.test(head)) return notFound();

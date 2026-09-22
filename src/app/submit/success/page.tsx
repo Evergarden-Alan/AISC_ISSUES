@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SLA_TEXT } from "@/lib/constants";
 
-// 提交成功页（01 §6.1 定稿）：编号 + 复制编号 + 专属链接区（M2 起渲染）+ SLA
+// 提交成功页（01 §6.1 定稿）：编号 + 复制编号 + 专属链接区（M2 起渲染）
+// v0.1.1 R4：移除 SLA 类承诺文案，保留中性引导。
 
 interface LastSubmit {
   id: string;
@@ -144,7 +144,9 @@ export default function SubmitSuccessPage() {
           </p>
         </div>
 
-        <p className="mt-8 text-sm text-slate-600">{SLA_TEXT}。</p>
+        <p className="mt-8 text-sm text-slate-600">
+          您的反馈已收到。之后通过上面的专属链接回来看看，就能看到开发者的回复。
+        </p>
       </div>
 
       <Link href="/" className="mx-auto mt-8 text-sm text-blue-600 hover:underline">

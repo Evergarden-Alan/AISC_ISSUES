@@ -25,6 +25,7 @@ export interface FeedbackFrontmatter {
   nickname?: string; // 选填称呼 ≤20 字（v0.1.0 起 contact 已移除）
   duplicate_of?: string; // 仅 status = duplicate
   archived: boolean; // 恒为 false（v1）
+  affects?: number; // v0.1.1 新增：投票计数，缺省视为 0（读取层经 affectsOf 归一化）
 }
 
 /** 服务端校验后的提交输入（已按路径裁剪） */

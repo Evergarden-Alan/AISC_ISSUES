@@ -3,8 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "AISC_ISSUES 反馈站",
-  description:
-    "遇到问题，或想要新功能？1 分钟提交，开发者会回复。我们通常在 3 个工作日内回复。",
+  description: "遇到问题，或想要新功能？提交反馈给 AISC_ISSUES 开发者，并跟踪处理进度。",
 };
 
 export const viewport: Viewport = {

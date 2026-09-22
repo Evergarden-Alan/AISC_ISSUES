@@ -261,6 +261,51 @@ export async function withConflictRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+
+export interface TreeEntry {
+  path: string;
+  type: "blob" | "tree" | "commit";
+  sha: string;
+  size?: number;
+}
+
+interface TreeResponse {
+  sha: string;
+  tree: TreeEntry[];
+  truncated?: boolean;
+}
+
+/**
+ * 两步非递归取 feedback/ 下全部 .md 路径（v0.1.1 M1-3，绕开 Contents 列目录约 1000 条截断）：
+ * ① GET /git/trees/HEAD（HEAD 解析为默认分支，免新增分支环境变量）取根树；
+ * ② 定位 path==="feedback" 且 type==="tree" 的子树 sha → GET /git/trees/{sha}（recursive=0 仅列该层）。
+ * 返回 `feedback/{path}` 列表（子树条目 path 相对子树，需拼前缀）。
+ * 刻意不用 ?recursive=1（防大仓库 truncated:true 与响应体积失控）；调用数恒为 2。
+ * 失败（403/404/网络异常或 truncated）抛 GitHubApiError；根树无 feedback 目录 → 返回 []。
+ */
+export async function githubListFeedbackMdPaths(
+  revalidate?: number
+): Promise<string[]> {
+  const { owner, repo } = getConfig();
+  const root = await githubJson<TreeResponse>(
+    `/repos/${owner}/${repo}/git/trees/HEAD`,
+    revalidate ? { revalidate } : {}
+  );
+  if (!root.data || root.data.truncated) throw new GitHubApiError(root.data ? 500 : 404);
+  const feedbackTree = root.data.tree.find(
+    (e) => e.path === "feedback" && e.type === "tree"
+  );
+  if (!feedbackTree) return [];
+  const sub = await githubJson<TreeResponse>(
+    `/repos/${owner}/${repo}/git/trees/${feedbackTree.sha}`,
+    revalidate ? { revalidate } : {}
+  );
+  if (!sub.data || sub.data.truncated) throw new GitHubApiError(sub.data ? 500 : 404);
+  return sub.data.tree
+    .filter((e) => e.type === "blob" && e.path.endsWith(".md"))
+    .map((e) => `feedback/${e.path}`);
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }

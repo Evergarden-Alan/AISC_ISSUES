@@ -67,7 +67,9 @@ npm run build                # 发布前本地构建检查
 | `FEEDBACK_TOKEN_SECRET` | ✅ | 详情页 token HMAC 密钥 |
 | `NEXT_PUBLIC_SITE_URL` | 建议 | `https://feedback.alanevergarden.xyz` |
 | `ADMIN_TOKEN` | 可选 | 不配则 /admin 停用 |
-| `TURNSTILE_*` / `UPSTASH_*` | 可选 | 预留开关，默认关闭 |
+| `CRON_SECRET` | cron 需配 | v0.1.1：/api/cron/cleanup 鉴权；不配则清理任务停用（404） |
+| `TURNSTILE_*` | 可选 | v0.1.1 已实现；三值齐备才启用，默认关（开启前须确认墙外脚本例外） |
+| `UPSTASH_*` | 可选 | v0.1.1 已实现；非空即启用 Redis 精确限流，留空回退内存 |
 
 ## 八、部署与运维要点
 

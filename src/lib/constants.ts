@@ -1,7 +1,25 @@
 // ===== 枚举与中文映射（单一事实来源）=====
 // 规则：枚举值一律英文小写入库；用户可见文案一律简体中文（见 CLAUDE.md）。
 
-export const PRODUCT_ID = "aisc-issues" as const;
+/**
+ * 产品注册表（v0.1.1 R3 参数化收口）：加第二款产品时在此扩容并做 UI 分流，
+ * 仓库路径经 feedbackPath/assetsPath 收口，禁止散落硬编码。
+ */
+export const PRODUCT_IDS = ["aisc-issues"] as const;
+export const CURRENT_PRODUCT = PRODUCT_IDS[0];
+
+/** 仓库内反馈 md 路径（私有反馈仓库） */
+export function feedbackPath(id: string): string {
+  return `feedback/${id}.md`;
+}
+
+/** 仓库内附件目录前缀（私有反馈仓库；调用方自行拼 /文件名） */
+export function assetsPath(id: string): string {
+  return `feedback/assets/${id}`;
+}
+
+/** affects 投票计数的写入上限（防异常值，02-design §1.1） */
+export const AFFECTS_MAX = 999_999;
 
 export const TYPE_VALUES = ["bug", "feature", "ux", "question", "other"] as const;
 export const ISSUE_TYPE_VALUES = ["bug", "ux", "question", "other"] as const; // 问题路径卡片（不含 feature）
@@ -90,10 +108,9 @@ export function statusLabel(
 /** 反馈 id / 用户可见编号格式（02 §5.1） */
 export const ID_PATTERN = /^\d{8}-\d{6}-[a-z0-9]{6}$/;
 
-/** 空态与 SLA 文案（定稿，01 §3） */
-export const SLA_TEXT = "我们通常在 3 个工作日内回复";
-export const EMPTY_REPLY_TEXT = `${SLA_TEXT}。`;
-export const NO_REPLY_DETAIL_TEXT = `开发者还没有回复。${SLA_TEXT}，请过几天再来看看。`;
+/** 空态文案（v0.1.1 R4 基线演进：不含任何时限承诺） */
+export const EMPTY_REPLY_TEXT = "还没有回复，过几天再来看看。";
+export const NO_REPLY_DETAIL_TEXT = "开发者还没有回复，过几天再来看看。";
 export const HIDDEN_TEXT = "该反馈已被隐藏，无法查看。";
 export const NO_REPLY_PLACEHOLDER = "（暂无）";
 export const NOT_PROVIDED_PLACEHOLDER = "（未提供）";

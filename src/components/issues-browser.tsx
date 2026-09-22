@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TypeBadge, StatusBadge } from "@/components/badges";
 import {
   STATUS_LABELS,
@@ -11,8 +12,9 @@ import {
 } from "@/lib/constants";
 import type { ListItem } from "@/lib/data";
 
-// 「查看全部」列表浏览器（01 §3.3 → M3 列表页）：
-// 问题/功能维度 + 状态 + 类型筛选 + 关键词搜索（标题/编号）+ 前端分页 20/页
+// 「查看全部」列表浏览器（01 §3.3 → M3 列表页；v0.1.1 M5-2 增加日期区间筛选）：
+// 问题/功能维度 + 状态 + 类型筛选 + 关键词搜索（标题/编号）+ 提交日期区间 + 前端分页 20/页。
+// q/from/to 经 URL 参数同步（router.replace），可直达筛选态；维度/状态/类型不进 URL。
 
 const PAGE_SIZE = 20;
 
@@ -22,12 +24,44 @@ const DIMENSIONS = [
   { key: "feature", label: "功能建议" },
 ] as const;
 
-export function IssuesBrowser({ items }: { items: ListItem[] }) {
+function dateParam(v: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
+}
+
+export function IssuesBrowser({
+  items,
+  initialQuery = "",
+  initialFrom = "",
+  initialTo = "",
+}: {
+  items: ListItem[];
+  initialQuery?: string;
+  initialFrom?: string;
+  initialTo?: string;
+}) {
+  const router = useRouter();
   const [dim, setDim] = useState<(typeof DIMENSIONS)[number]["key"]>("all");
   const [status, setStatus] = useState<string>("all");
   const [type, setType] = useState<string>("all");
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(initialQuery);
+  const [from, setFrom] = useState(dateParam(initialFrom));
+  const [to, setTo] = useState(dateParam(initialTo));
   const [page, setPage] = useState(1);
+
+  // q/from/to 变更同步到 URL（跳过首渲染；replace 不产生历史记录、不跳顶）
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (keyword.trim()) params.set("q", keyword.trim());
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    const qs = params.toString();
+    router.replace(qs ? `/issues?${qs}` : "/issues", { scroll: false });
+  }, [keyword, from, to, router]);
 
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
@@ -38,9 +72,12 @@ export function IssuesBrowser({ items }: { items: ListItem[] }) {
       if (kw && !it.title.toLowerCase().includes(kw) && !it.id.includes(kw)) {
         return false;
       }
+      const day = it.createdAt.slice(0, 10); // "2026-09-21"
+      if (from && day < from) return false;
+      if (to && day > to) return false;
       return true;
     });
-  }, [items, dim, status, type, keyword]);
+  }, [items, dim, status, type, keyword, from, to]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const current = Math.min(page, totalPages);
@@ -87,6 +124,45 @@ export function IssuesBrowser({ items }: { items: ListItem[] }) {
         aria-label="搜索反馈"
         className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       />
+
+      {/* 提交日期区间筛选（含边界日） */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-sm text-slate-600">提交日期</span>
+        <input
+          type="date"
+          value={from}
+          onChange={(e) => {
+            setFrom(dateParam(e.target.value));
+            resetPage();
+          }}
+          aria-label="提交日期起"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+        />
+        <span className="text-sm text-slate-400">至</span>
+        <input
+          type="date"
+          value={to}
+          onChange={(e) => {
+            setTo(dateParam(e.target.value));
+            resetPage();
+          }}
+          aria-label="提交日期止"
+          className="h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+        />
+        {from || to ? (
+          <button
+            type="button"
+            onClick={() => {
+              setFrom("");
+              setTo("");
+              resetPage();
+            }}
+            className="text-sm text-slate-500 underline hover:text-slate-800"
+          >
+            清除日期
+          </button>
+        ) : null}
+      </div>
 
       {/* 维度筛选 */}
       <div className="mt-3 flex flex-wrap gap-2">

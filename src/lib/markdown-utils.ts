@@ -1,10 +1,11 @@
 import matter from "gray-matter";
 import { JSON_SCHEMA, load as yamlLoad } from "js-yaml";
 import {
+  AFFECTS_MAX,
+  CURRENT_PRODUCT,
   NO_REPLY_PLACEHOLDER,
   NONE_PLACEHOLDER,
   NOT_PROVIDED_PLACEHOLDER,
-  PRODUCT_ID,
 } from "./constants.ts";
 import { beijingClock, beijingIso } from "./beijing-time.ts";
 import type {
@@ -120,7 +121,7 @@ export function renderFeedbackMarkdown(
   const fm: string[] = [
     "---",
     `id: "${id}"`,
-    `product: "${PRODUCT_ID}"`,
+    `product: "${CURRENT_PRODUCT}"`,
     `title: "${yamlSafe(input.title)}"`,
     `type: "${input.type}"`,
     `severity: "${input.severity}"`,
@@ -302,4 +303,88 @@ export function extractReplyRounds(body: string): ReplyRound[] {
       return { time, text };
     })
     .filter((r) => r.time && r.text);
+}
+
+// ===== v0.1.1 增量：affects 投票计数 + 回复撤回（02-design §1.1/§7.1）=====
+
+/** 读取层归一化：非正整数一律按 0（含 undefined / 脏数据） */
+export function affectsOf(fm: FeedbackFrontmatter): number {
+  const v = fm.affects;
+  if (typeof v !== "number" || !Number.isFinite(v)) return 0;
+  const n = Math.floor(v);
+  if (n <= 0) return 0;
+  return Math.min(n, AFFECTS_MAX);
+}
+
+/**
+ * 设置 frontmatter 的整型字段（vote 专用，YAML 裸数字不加引号）。
+ * 字段已存在 → 整行替换为 `field: N`；不存在 → 插入到 `status: "..."` 行之后
+ * （status 必有且唯一，作为稳定锚点）；raw 无合法 frontmatter → 原样返回。
+ */
+export function setFrontmatterIntField(
+  raw: string,
+  field: string,
+  value: number
+): string {
+  if (!raw.startsWith("---")) return raw;
+  const end = raw.indexOf("\n---", 3);
+  if (end === -1) return raw;
+  const head = raw.slice(0, end);
+  const n = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
+  const lineRe = new RegExp(`^${field}: \\d+$`, "m");
+  if (lineRe.test(head)) {
+    return head.replace(lineRe, `${field}: ${n}`) + raw.slice(end);
+  }
+  const statusRe = /^status: "[^"\n]*"$/m;
+  if (!statusRe.test(head)) return raw;
+  const withField = head.replace(statusRe, (m0) => `${m0}\n${field}: ${n}`);
+  return withField + raw.slice(end);
+}
+
+export interface RemoveReplyResult {
+  removed: boolean;
+  raw: string;
+  round: { time: string; text: string } | null;
+}
+
+/**
+ * 移除「## 开发者回复」的最后一轮 `### ` 小节（撤回 / 编辑回复共用）。
+ * 移除后分区为空 → 写回占位「（暂无）」；无分区 / 无轮次 / 占位态 → 原样返回。
+ * 不触碰 frontmatter（含 affects 行）与其他分区。
+ */
+export function removeLastDeveloperReply(raw: string): RemoveReplyResult {
+  const m = raw.match(/^## 开发者回复\s*$/m);
+  if (!m || m.index === undefined) return { removed: false, raw, round: null };
+  const start = m.index + m[0].length;
+  const rest = raw.slice(start);
+  const nextH2 = rest.search(/^## /m);
+  const sectionEnd = nextH2 === -1 ? raw.length : start + nextH2;
+  const section = raw.slice(start, sectionEnd);
+  const trimmed = section.trim();
+  if (!trimmed || trimmed === NO_REPLY_PLACEHOLDER) {
+    return { removed: false, raw, round: null };
+  }
+  const rounds = [...section.matchAll(/^### .+$/gm)];
+  if (rounds.length === 0) {
+    return { removed: false, raw, round: null };
+  }
+  const last = rounds[rounds.length - 1];
+  const lastStart = last.index ?? 0;
+  const lastText = section.slice(lastStart);
+  const nl = lastText.indexOf("\n");
+  const headingLine = (nl === -1 ? lastText : lastText.slice(0, nl)).trim();
+  const heading = headingLine.replace(/^###\s+/, "").trim();
+  const time = heading.replace(/\s*开发者\s*$/, "").trim();
+  const text = (nl === -1 ? "" : lastText.slice(nl + 1)).trim();
+  if (!time) return { removed: false, raw, round: null };
+
+  const head = raw.slice(0, start);
+  const after = raw.slice(sectionEnd); // "" 或 "\n\n## …"（开发者回复分区惯为文末）
+  const tail = after === "" ? "\n" : after.startsWith("\n") ? after : `\n${after}`;
+  const remain = section.slice(0, lastStart).replace(/\s+$/, "");
+  // head 已含「## 开发者回复」行尾换行（m[0] 含 \s*），此处只补一个空行
+  const out = remain.trim()
+    ? `${head}\n${remain.trim()}${tail}`
+    : `${head}\n${NO_REPLY_PLACEHOLDER}${tail}`;
+  return { removed: true, raw: out, round: { time, text } };
 }

@@ -5,6 +5,7 @@ import {
   isValidAssetPath,
   ASSET_PATH_PATTERN,
   PENDING_REF_PATTERN,
+  pendingDirDateMs,
   extOf,
   sniffImageType,
   isZipMagic,
@@ -47,12 +48,33 @@ test("isValidAssetPath：合法放行；../、_pending、越界路径拒绝", ()
   assert.ok(!isValidAssetPath("feedback/assets/20260921-143025-a3f9kz/.."));
 });
 
-test("PENDING_REF_PATTERN：uuid 目录 + 安全化文件名", () => {
+test("PENDING_REF_PATTERN：日期化目录与旧 uuid 目录双格式兼容", () => {
+  // v0.1.1 新格式：YYYYMMDD-HHmmss-uuid4
+  assert.ok(
+    PENDING_REF_PATTERN.test(
+      "_pending/20260922-143005-3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/屏幕截图.png"
+    )
+  );
+  // v0.1.0 旧格式（过渡期兼容）
   assert.ok(
     PENDING_REF_PATTERN.test("_pending/3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/屏幕截图.png")
   );
-  assert.ok(!PENDING_REF_PATTERN.test("_pending/abc/a.png")); // 非 uuid
+  assert.ok(!PENDING_REF_PATTERN.test("_pending/abc/a.png")); // 非法目录
+  assert.ok(
+    !PENDING_REF_PATTERN.test(
+      "_pending/2026-0922-3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/a.png"
+    )
+  ); // 日期段形状非法（日期位取值合法性由 pendingDirDateMs 判）
   assert.ok(!PENDING_REF_PATTERN.test("assets/3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/a.png"));
+});
+
+test("pendingDirDateMs：目录名日期时间（北京时间）→ epoch ms", () => {
+  assert.equal(
+    pendingDirDateMs("20260922-143005-3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829"),
+    Date.UTC(2026, 8, 22, 6, 30, 5) // 北京 = UTC+8
+  );
+  assert.equal(pendingDirDateMs("3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829"), null); // 旧格式无日期
+  assert.equal(pendingDirDateMs("garbage"), null);
 });
 
 test("ASSET_PATH_PATTERN 形态约束", () => {

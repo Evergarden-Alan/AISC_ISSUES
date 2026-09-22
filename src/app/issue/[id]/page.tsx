@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { ID_PATTERN, HIDDEN_TEXT, NO_REPLY_DETAIL_TEXT } from "@/lib/constants";
 import { getIssue } from "@/lib/data";
+import { affectsOf } from "@/lib/markdown-utils";
 import { StatusBadge, TypeBadge, SeverityBadge } from "@/components/badges";
 import { IssueDetailBody } from "@/components/issue-detail-body";
+import { VoteButton } from "@/components/vote-button";
 
 // 专属详情页 /issue/{id}?t={token}（01 §6.2，M2）
 // 公开可访问（编号 6 位随机串不可枚举），t 为提交者凭证但不作强制拦截（已拍板②）。
@@ -89,6 +91,9 @@ export default async function IssueDetailPage({
             {NO_REPLY_DETAIL_TEXT}
           </p>
         ) : null}
+
+        {/* +1 投票（v0.1.1 M4）：问题=「我也遇到」/ 功能=「我想要」 */}
+        <VoteButton id={fm.id} category={category} initialAffects={affectsOf(fm)} />
       </div>
     </main>
   );

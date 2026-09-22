@@ -18,7 +18,7 @@ Next.js App Router + TypeScript strict + Tailwind CSS v4 + shadcn/ui + react-mar
 
 ## 语言与文案
 - 用户可见文案一律简体中文；枚举值一律英文小写，前端中文映射。
-- 空态文案：「我们通常在 3 个工作日内回复」。
+- 空态文案不含时限承诺（v0.1.1 R4 基线演进）：如「还没有回复，过几天再来看看。」；禁止「X 个工作日内回复」类 SLA 文案。
 
 ## 安全红线
 - 禁止任何墙外资源（无 Google 字体/外部 CDN）；资源自托管或经自家 API 代理。

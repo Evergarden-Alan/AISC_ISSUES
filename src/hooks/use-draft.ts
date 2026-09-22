@@ -34,6 +34,8 @@ export interface DraftState {
     workaround: string;
   };
   idempotencyKey: string;
+  /** v0.1.1：Turnstile token（提交时消耗一枚，随 POST /api/feedback 提交；默认关闭为空串） */
+  turnstileToken: string;
   savedAt: string; // ISO 8601 (+08:00)
 }
 
@@ -54,6 +56,7 @@ export function emptyDraft(): DraftState {
     },
     feature: { scenario: "", workaround: "" },
     idempotencyKey: "",
+    turnstileToken: "",
     savedAt: "",
   };
 }
@@ -91,6 +94,7 @@ export function loadDraft(): DraftState {
       issue: { ...base.issue, ...parsed.issue },
       feature: { ...base.feature, ...parsed.feature },
       idempotencyKey: parsed.idempotencyKey || makeUuidV4(),
+      turnstileToken: typeof parsed.turnstileToken === "string" ? parsed.turnstileToken : "",
     };
   } catch {
     return { ...base, idempotencyKey: makeUuidV4() };

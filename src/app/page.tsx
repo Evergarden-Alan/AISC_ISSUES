@@ -4,7 +4,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { ReplyTabs } from "@/components/reply-tabs";
 import { IdLookup } from "@/components/id-lookup";
 import { getHomeData } from "@/lib/data";
-import { SLA_TEXT } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 // 首页（01 §3）：Hero → 轻统计（M3：累计/已解决/平均首次回应）→ 按编号查询 → 回信区双 Tab（含查看全部）→ 页脚
@@ -23,8 +22,9 @@ export default async function Home() {
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
           遇到问题，或想要新功能？
         </h1>
-        <p className="mt-3 text-lg text-slate-600">1 分钟提交，开发者会回复。</p>
-        <p className="mt-1 text-sm text-slate-500">{SLA_TEXT}</p>
+        <p className="mt-3 text-lg text-slate-600">
+          写下来告诉开发者，回这里看回复。
+        </p>
         <Link
           href="/submit"
           className={cn(buttonVariants({ size: "lg" }), "mt-6 w-full sm:w-auto")}
@@ -94,10 +94,7 @@ export default async function Home() {
       {/* 页脚（01 §3.5 三行文案） */}
       <footer className="mt-16 border-t border-slate-200 pt-6 text-center text-xs leading-6 text-slate-500">
         <p>AISC_ISSUES 反馈站 · 专门收集 AISC_ISSUES 软件的使用反馈</p>
-        <p>
-          反馈内容将以文本形式存入 GitHub
-          仓库，供开发者查看和处理。{SLA_TEXT}。
-        </p>
+        <p>反馈内容将以文本形式存入 GitHub 仓库，供开发者查看和处理。</p>
         <p>© {year} AISC_ISSUES</p>
       </footer>
     </main>

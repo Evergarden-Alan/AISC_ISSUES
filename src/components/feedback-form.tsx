@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldAlert, TriangleAlert } from "lucide-react";
+import {
+  TurnstileWidget,
+  type TurnstileHandle,
+} from "@/components/turnstile-widget";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/form-controls";
 import { ScreenshotUploader } from "@/components/screenshot-uploader";
@@ -32,8 +36,13 @@ type FieldErrors = Partial<
   Record<"type" | "severity" | "title" | "description" | "nickname", string>
 >;
 
-export function FeedbackForm() {
+export function FeedbackForm({ siteKey }: { siteKey?: string }) {
   const router = useRouter();
+  const tsRef = useRef<TurnstileHandle | null>(null);
+  const getTurnstileToken = useCallback((): Promise<string> => {
+    if (!siteKey) return Promise.resolve("");
+    return tsRef.current?.consumeToken() ?? Promise.resolve("");
+  }, [siteKey]);
   const [state, setState] = useState<DraftState>(emptyDraft);
   const [ready, setReady] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -127,7 +136,7 @@ export function FeedbackForm() {
     return errs;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     const errs = validateClient();
@@ -147,7 +156,9 @@ export function FeedbackForm() {
 
     // 先把含已上传附件引用的完整状态落盘，再跳转提交中转页执行真正的 POST。
     // 中转页成功 → 成功页；失败 → 带原因跳回本页弹 toast（草稿已恢复）。
-    saveDraft(state);
+    // Turnstile 开启时此处消耗一枚 token 随草稿带往中转页（默认关闭为空串）。
+    const turnstileToken = await getTurnstileToken();
+    saveDraft({ ...state, turnstileToken });
     router.push("/submit/pending");
   }
 
@@ -157,7 +168,9 @@ export function FeedbackForm() {
   const descLen = charCount(state.shared.description);
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
+    <form onSubmit={(e) => { void handleSubmit(e); }} noValidate>
+      {/* Turnstile 挂载点（默认关闭不渲染，零墙外请求） */}
+      {siteKey ? <TurnstileWidget ref={tsRef} siteKey={siteKey} /> : null}
       {/* 隐藏蜜罐字段：不可见、不可聚焦；正常用户永远看不到（01 §4.4） */}
       <input
         ref={honeypotRef}
@@ -444,6 +457,7 @@ export function FeedbackForm() {
             onUploadingChange={(u) =>
               setUploadingCount((c) => Math.max(0, c + (u ? 1 : -1)))
             }
+            getTurnstileToken={getTurnstileToken}
           />
         </div>
       </div>
@@ -473,6 +487,7 @@ export function FeedbackForm() {
               onUploadingChange={(u) =>
                 setUploadingCount((c) => Math.max(0, c + (u ? 1 : -1)))
               }
+              getTurnstileToken={getTurnstileToken}
             />
           </div>
         </details>

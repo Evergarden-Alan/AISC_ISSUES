@@ -5,7 +5,10 @@ import {
   TYPE_LABELS,
   SEVERITY_LABELS,
   statusLabel,
-  PRODUCT_ID,
+  CURRENT_PRODUCT,
+  PRODUCT_IDS,
+  feedbackPath,
+  assetsPath,
   TYPE_VALUES,
   STATUS_VALUES,
   SEVERITY_VALUES,
@@ -57,5 +60,11 @@ test("schema 常量完备：7 状态 × 双映射、3 严重度、2 档位", () 
   }
   assert.equal(SEVERITY_VALUES.length, 3);
   assert.equal(TIER_VALUES.length, 2);
-  assert.equal(PRODUCT_ID, "aisc-issues");
+  assert.deepEqual([...PRODUCT_IDS], ["aisc-issues"]);
+  assert.equal(CURRENT_PRODUCT, "aisc-issues");
+});
+
+test("R3 路径收口函数：feedbackPath / assetsPath", () => {
+  assert.equal(feedbackPath("20260921-143025-a3f9kz"), "feedback/20260921-143025-a3f9kz.md");
+  assert.equal(assetsPath("20260921-143025-a3f9kz"), "feedback/assets/20260921-143025-a3f9kz");
 });

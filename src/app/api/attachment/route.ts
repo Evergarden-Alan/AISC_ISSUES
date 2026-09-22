@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sameOrigin, clientIp } from "@/lib/guards";
 import { hitUploadLimit } from "@/lib/rate-limit";
+import { turnstileEnabled, verifyTurnstileToken } from "@/lib/turnstile";
 import {
   FILE_EXTS,
   IMAGE_EXTS,
@@ -36,11 +37,12 @@ function fail(error: string, status = 400) {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
-const UUID_RE = /^[0-9a-f-]{36}$/;
+// v0.1.1 日期化目录：新格式优先，旧裸 uuid 兼容一个版本周期
+const UPLOAD_ID_RE = /^(\d{8}-\d{6}-[0-9a-f-]{36}|[0-9a-f-]{36})$/;
 
 export async function POST(req: NextRequest) {
   if (!sameOrigin(req)) return fail("请通过本网站提交", 403);
-  if (!hitUploadLimit(clientIp(req))) {
+  if (!(await hitUploadLimit(clientIp(req)))) {
     return fail("上传太频繁，请稍后再试", 429);
   }
 
@@ -60,6 +62,17 @@ export async function POST(req: NextRequest) {
     return fail("上传内容格式不正确");
   }
 
+  // Turnstile 人机验证（v0.1.1 M2-1，默认关；开启时缺 token 降级放行并告警）
+  if (turnstileEnabled()) {
+    const rawTok = form.get("turnstileToken");
+    const tsTok = typeof rawTok === "string" ? rawTok : "";
+    if (!tsTok) {
+      console.warn("[turnstile] 缺 token 降级放行");
+    } else if (!(await verifyTurnstileToken(tsTok, clientIp(req)))) {
+      return fail("人机验证未通过，请刷新页面重试");
+    }
+  }
+
   const file = form.get("file");
   const kind = form.get("kind");
   const isFinalize = form.get("finalize") === "1";
@@ -67,7 +80,7 @@ export async function POST(req: NextRequest) {
   const uploadId = typeof rawUploadId === "string" ? rawUploadId : "";
 
   if (isFinalize) {
-    if (file !== null || kind !== "file" || !UUID_RE.test(uploadId)) {
+    if (file !== null || kind !== "file" || !UPLOAD_ID_RE.test(uploadId)) {
       return fail("上传内容格式不正确");
     }
     return finalize(form);

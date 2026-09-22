@@ -3,13 +3,15 @@
 import { useRef, useState } from "react";
 import { Paperclip, Trash2, TriangleAlert } from "lucide-react";
 import {
+  formatUploadProgress,
   uploadAttachment,
   uploadLargeFile,
   type UploadedRef,
 } from "@/lib/upload-client";
 
 // 日志附件上传（01 §4.2 字段 6，仅问题路径）：.log/.txt/.json/.zip、单文件 ≤20MB、最多 3 个。
-// >3.5MB 自动分片上传 + 服务端合并（绕开 Vercel 4.5MB 请求体上限），带进度提示。
+// >3.5MB 自动分片上传 + 服务端合并（绕开 Vercel 4.5MB 请求体上限）。
+// v0.1.1：XHR 进度（百分比 + 速度）；分片显示「x/y 片」，合并阶段固定文案。
 
 const MAX_FILES = 3;
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -19,10 +21,12 @@ export function AttachmentUploader({
   value,
   onChange,
   onUploadingChange,
+  getTurnstileToken,
 }: {
   value: UploadedRef[];
   onChange: (v: UploadedRef[]) => void;
   onUploadingChange?: (uploading: boolean) => void;
+  getTurnstileToken?: () => Promise<string>;
 }) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState("");
@@ -35,12 +39,22 @@ export function AttachmentUploader({
   }
 
   async function uploadOne(file: File): Promise<UploadedRef> {
+    const token = getTurnstileToken ? await getTurnstileToken() : "";
     if (file.size <= CHUNK_THRESHOLD) {
-      return uploadAttachment(file, "file");
+      return uploadAttachment(
+        file,
+        "file",
+        (p) => setProgress(`上传中 ${formatUploadProgress(p)}`),
+        token
+      );
     }
-    return uploadLargeFile(file, (done, total) => {
-      setProgress(`上传分片 ${done}/${total}…`);
-    });
+    return uploadLargeFile(
+      file,
+      (p, i, total) =>
+        setProgress(`上传中 ${formatUploadProgress(p)}，第 ${i}/${total} 片`),
+      token,
+      () => setProgress("正在合并分片…")
+    );
   }
 
   async function handleFiles(list: FileList | null) {

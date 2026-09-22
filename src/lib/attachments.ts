@@ -93,9 +93,33 @@ export function sanitizeFileName(name: string): string {
 export const ASSET_PATH_PATTERN =
   /^feedback\/assets\/[0-9]{8}-[0-9]{6}-[a-z0-9]{6}\/[A-Za-z0-9一-龥._-]+$/;
 
-/** 附件引用白名单：_pending/{uuid}/{安全化文件名}（03 §3.1） */
+/**
+ * 附件引用白名单（v0.1.1 日期化目录，双格式兼容）：
+ * 新 _pending/{YYYYMMDD-HHmmss}-{uuid4}/{安全化文件名}；旧 _pending/{uuid4}/… 过渡期放行。
+ */
 export const PENDING_REF_PATTERN =
-  /^_pending\/[0-9a-f-]{36}\/[A-Za-z0-9一-龥._-]+$/;
+  /^_pending\/(\d{8}-\d{6}-[0-9a-f-]{36}|[0-9a-f-]{36})\/[A-Za-z0-9一-龥._-]+$/;
+
+/** _pending 子目录名：日期化新格式 */
+export const PENDING_DIR_NEW_RE = /^\d{8}-\d{6}-[0-9a-f-]{36}$/;
+/** _pending 子目录名：v0.1.0 遗留裸 uuid 格式 */
+export const PENDING_DIR_LEGACY_RE = /^[0-9a-f-]{36}$/;
+
+/**
+ * 目录名前 15 位日期时间（北京时间 YYYYMMDD-HHmmss）→ epoch ms。
+ * 无日期前缀（v0.1.0 遗留）或格式非法 → null。
+ */
+export function pendingDirDateMs(dirName: string): number | null {
+  const m = dirName.match(/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})-/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi, se] = m;
+  const moN = +mo, dN = +d, hN = +h, miN = +mi, seN = +se;
+  if (moN < 1 || moN > 12 || dN < 1 || dN > 31 || hN > 23 || miN > 59 || seN > 59) {
+    return null; // 分段越界（防 Date.UTC 静默进位误判）
+  }
+  const ms = Date.UTC(+y, moN - 1, dN, hN - 8, miN, seN); // 北京 = UTC+8
+  return Number.isFinite(ms) ? ms : null;
+}
 
 export function isValidAssetPath(p: string): boolean {
   return !p.includes("..") && ASSET_PATH_PATTERN.test(p);

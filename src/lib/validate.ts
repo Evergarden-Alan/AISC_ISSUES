@@ -82,9 +82,18 @@ function doValidate(body: unknown): {
     "screenshots",
     "attachments",
     "env",
+    "turnstileToken", // v0.1.1 M2-1：可选，是否校验由路由层按开关判定
   ]);
   for (const key of Object.keys(body)) {
     if (!ALLOWED.has(key)) throw new ValidationError("提交内容格式不正确");
+  }
+
+  // —— turnstile token（仅形态校验：string 且 ≤2048；缺失合法 = 前端降级场景）——
+  const tsToken = body.turnstileToken;
+  if (tsToken !== undefined) {
+    if (typeof tsToken !== "string" || tsToken.length > 2048) {
+      throw new ValidationError("提交内容格式不正确");
+    }
   }
 
   // —— 幂等键 ——

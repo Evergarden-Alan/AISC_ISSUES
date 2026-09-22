@@ -48,6 +48,7 @@ export default function SubmitPendingPage() {
         nickname: d.shared.nickname.trim() || undefined,
         screenshots: d.shared.screenshots,
         attachments: isIssue ? d.issue.attachments : undefined,
+        turnstileToken: d.turnstileToken || undefined,
         env: {
           ua: navigator.userAgent,
           platform: navigator.platform || "",
