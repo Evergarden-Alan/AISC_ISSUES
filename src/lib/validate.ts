@@ -111,7 +111,7 @@ function doValidate(body: unknown): {
     throw new ValidationError("日志附件仅问题反馈路径支持，功能建议请勿上传附件");
   }
   const screenshots = hasShots
-    ? parseRefs(body.screenshots, [...IMAGE_EXTS], 3, "截图")
+    ? parseRefs(body.screenshots, [...IMAGE_EXTS], 10, "截图")
     : undefined;
   const attachments =
     category === "issue" && hasFiles

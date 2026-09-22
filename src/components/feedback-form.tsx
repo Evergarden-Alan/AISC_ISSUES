@@ -17,10 +17,8 @@ import {
 } from "@/lib/constants";
 import {
   charCount,
-  clearDraft,
   emptyDraft,
   loadDraft,
-  makeUuidV4,
   saveDraft,
   type DraftState,
   type FormPath,
@@ -39,12 +37,13 @@ export function FeedbackForm() {
   const [state, setState] = useState<DraftState>(emptyDraft);
   const [ready, setReady] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [toast, setToast] = useState("");
   const [savedHint, setSavedHint] = useState(false);
   const [pathHint, setPathHint] = useState("");
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 挂载时恢复草稿（含幂等键）。
   // 必须在 effect 中同步恢复：useState 初始化器会在 SSR 预渲染时执行，
@@ -52,8 +51,20 @@ export function FeedbackForm() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(loadDraft());
-     
+
     setReady(true);
+    // 提交失败时由 /submit/pending 写入失败原因并跳回本页 → 弹 toast
+    try {
+      const msg = sessionStorage.getItem("aisc:submit-error");
+      if (msg) {
+        sessionStorage.removeItem("aisc:submit-error");
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setToast(msg);
+        toastTimer.current = setTimeout(() => setToast(""), 8000);
+      }
+    } catch {
+      // 忽略
+    }
   }, []);
 
   // 草稿实时保存（ready 后每次变更）；保存提示 2 秒后淡出
@@ -70,6 +81,7 @@ export function FeedbackForm() {
     () => () => {
       if (hintTimer.current) clearTimeout(hintTimer.current);
       if (savedTimer.current) clearTimeout(savedTimer.current);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
     },
     []
   );
@@ -115,9 +127,8 @@ export function FeedbackForm() {
     return errs;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting) return;
 
     const errs = validateClient();
     setErrors(errs);
@@ -127,67 +138,17 @@ export function FeedbackForm() {
       });
       return;
     }
-
-    setSubmitting(true);
-    setFormError("");
-    const isIssue = state.path === "issue";
-    const payload = {
-      idempotencyKey: state.idempotencyKey,
-      website: honeypotRef.current?.value ?? "",
-      type: isIssue ? state.issue.type : "feature",
-      severity: isIssue ? state.issue.severity : undefined,
-      title: state.shared.title.trim(),
-      description: state.shared.description.trim(),
-      steps: isIssue && state.issue.type === "bug" ? state.issue.steps.trim() : undefined,
-      expected: isIssue ? state.issue.expected.trim() : undefined,
-      actual: isIssue ? state.issue.actual.trim() : undefined,
-      scenario: !isIssue ? state.feature.scenario.trim() : undefined,
-      workaround: !isIssue ? state.feature.workaround.trim() : undefined,
-      nickname: state.shared.nickname.trim() || undefined,
-      screenshots: state.shared.screenshots,
-      attachments: isIssue ? state.issue.attachments : undefined,
-      env: {
-        ua: navigator.userAgent,
-        platform: navigator.platform || "",
-        url: location.href,
-      },
-    };
-
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-idempotency-key": state.idempotencyKey,
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as
-        | { ok: boolean; id?: string; url?: string; error?: string }
-        | null;
-      if (res.ok && data?.ok && data.id && data.url) {
-        clearDraft();
-        // 轮换幂等键，避免下次提交复用旧键
-        setState((s) => ({ ...s, ...emptyDraft(), idempotencyKey: makeUuidV4() }));
-        try {
-          sessionStorage.setItem(
-            "aisc:last-submit",
-            JSON.stringify({ id: data.id, url: `${location.origin}${data.url}` })
-          );
-        } catch {
-          // 忽略：成功页读取不到时回首页
-        }
-        router.push("/submit/success");
-        return;
-      }
-      setFormError(
-        data?.error || "提交暂时没有成功，您填写的内容都保留着，请稍后重试"
-      );
-    } catch {
-      setFormError("网络异常，您填写的内容都保留着，请稍后点「提交反馈」再试一次。");
-    } finally {
-      setSubmitting(false);
+    if (uploadingCount > 0) {
+      setToast("附件还在上传中，请等上传完成后再提交");
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(""), 5000);
+      return;
     }
+
+    // 先把含已上传附件引用的完整状态落盘，再跳转提交中转页执行真正的 POST。
+    // 中转页成功 → 成功页；失败 → 带原因跳回本页弹 toast（草稿已恢复）。
+    saveDraft(state);
+    router.push("/submit/pending");
   }
 
   const honeypotRef = useRef<HTMLInputElement>(null);
@@ -473,13 +434,16 @@ export function FeedbackForm() {
         </div>
       )}
 
-      {/* 现场截图（两路径均可传，≤3 张，客户端压缩+剥 EXIF） */}
+      {/* 现场截图（两路径均可传，≤10 张，客户端压缩+剥 EXIF） */}
       <div className="mt-6">
-        <Label>现场截图（可不传，最多 3 张）</Label>
+        <Label>现场截图（可不传，最多 10 张）</Label>
         <div className="mt-2">
           <ScreenshotUploader
             value={state.shared.screenshots}
             onChange={(v) => patchShared({ screenshots: v })}
+            onUploadingChange={(u) =>
+              setUploadingCount((c) => Math.max(0, c + (u ? 1 : -1)))
+            }
           />
         </div>
       </div>
@@ -506,6 +470,9 @@ export function FeedbackForm() {
             <AttachmentUploader
               value={state.issue.attachments}
               onChange={(v) => patchIssue({ attachments: v })}
+              onUploadingChange={(u) =>
+                setUploadingCount((c) => Math.max(0, c + (u ? 1 : -1)))
+              }
             />
           </div>
         </details>
@@ -544,26 +511,34 @@ export function FeedbackForm() {
         提交时会自动附上您的设备信息（操作系统、浏览器、所在页面、提交时间），帮助我们更快定位问题，无需您填写。
       </p>
 
-      {/* 提交失败提示（保留全部内容） */}
-      {formError ? (
-        <p
+      {/* 失败 toast（从提交中转页跳回时展示失败原因，8 秒自动消失） */}
+      {toast ? (
+        <div
           role="alert"
-          className="mt-4 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700"
+          className="fixed inset-x-4 bottom-24 z-50 mx-auto flex max-w-md items-start gap-2 rounded-lg bg-red-600 px-4 py-3 text-sm text-white shadow-lg"
         >
           <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
-          {formError}
-        </p>
+          <span className="flex-1">{toast}</span>
+          <button
+            type="button"
+            aria-label="关闭提示"
+            onClick={() => setToast("")}
+            className="ml-1 text-white/80 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
       ) : null}
 
-      {/* 提交按钮（01 §2 步骤 4） */}
+      {/* 提交按钮（01 §2 步骤 4）：点击后进入提交中转页 */}
       <div className="sticky bottom-0 -mx-4 mt-6 border-t border-slate-200 bg-slate-50/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur">
         <Button
           type="submit"
           size="lg"
-          disabled={submitting}
+          disabled={uploadingCount > 0}
           className="w-full"
         >
-          {submitting ? "正在提交…请不要关闭页面" : "提交反馈"}
+          {uploadingCount > 0 ? "附件上传中，请稍候…" : "提交反馈"}
         </Button>
         {savedHint ? (
           <p role="status" className="mt-2 text-center text-xs text-green-700">

@@ -116,17 +116,13 @@ test("引用校验：非法 ref / 超数量 / 扩展名不符均拒绝", () => {
   assert.equal(r1.ok, false);
   if (!r1.ok) assert.ok(r1.error.includes("过期"));
 
-  const r2 = validateSubmission({
-    ...ISSUE_OK,
-    screenshots: [
-      { ref: `_pending/${uuid}/1.png`, originalName: "1.png" },
-      { ref: `_pending/${uuid}/2.png`, originalName: "2.png" },
-      { ref: `_pending/${uuid}/3.png`, originalName: "3.png" },
-      { ref: `_pending/${uuid}/4.png`, originalName: "4.png" },
-    ],
-  });
+  const shots = Array.from({ length: 11 }, (_, i) => ({
+    ref: `_pending/${uuid}/${i}.png`,
+    originalName: `${i}.png`,
+  }));
+  const r2 = validateSubmission({ ...ISSUE_OK, screenshots: shots });
   assert.equal(r2.ok, false);
-  if (!r2.ok) assert.ok(r2.error.includes("3"));
+  if (!r2.ok) assert.ok(r2.error.includes("10"));
 
   const r3 = validateSubmission({
     ...ISSUE_OK,
@@ -134,6 +130,13 @@ test("引用校验：非法 ref / 超数量 / 扩展名不符均拒绝", () => {
   });
   assert.equal(r3.ok, false);
   if (!r3.ok) assert.ok(r3.error.includes("类型不支持"));
+
+  // 10 张恰好通过
+  const r4 = validateSubmission({
+    ...ISSUE_OK,
+    screenshots: shots.slice(0, 10),
+  });
+  assert.equal(r4.ok, true);
 });
 
 test("白名单外字段 → 整体 400", () => {

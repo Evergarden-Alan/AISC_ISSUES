@@ -1,8 +1,9 @@
 // 附件校验常量 + 魔数嗅闻 + 请求体封顶 + 文件名安全化 + 资源路径白名单（03 §3.2/§3.3、02 §7.1）
 
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // 截图 ≤4MB/张（客户端已压缩）
-export const MAX_FILE_BYTES = 3 * 1024 * 1024; // 日志 ≤3MB/个
-export const MAX_BODY_BYTES = 5 * 1024 * 1024; // Vercel 请求体 4.5MB 上限之下的流式封顶
+export const MAX_FILE_BYTES = 20 * 1024 * 1024; // 日志 ≤20MB/个（分片上传后服务端合并）
+export const MAX_BODY_BYTES = 4 * 1024 * 1024; // Vercel 请求体 4.5MB 上限之下的流式封顶
+export const MAX_CHUNK_BYTES = 4 * 1024 * 1024; // 单个分片上限（客户端按 3.5MB 切）
 
 export const IMAGE_EXTS = ["jpg", "png", "webp"] as const;
 export const FILE_EXTS = ["log", "txt", "json", "zip"] as const;
