@@ -34,16 +34,20 @@ function baseHeaders(pat: string): HeadersInit {
 /** JSON 请求（读路径带 ISR 缓存 revalidate，写路径 no-store） */
 export async function githubJson<T>(
   path: string,
-  init: RequestInit & { revalidate?: number } = {}
+  init: RequestInit & { revalidate?: number; tags?: string[] } = {}
 ): Promise<{ status: number; data: T | null }> {
   const { pat } = getConfig();
-  const { revalidate, ...rest } = init;
+  const { revalidate, tags, ...rest } = init;
   const headers = { ...baseHeaders(pat), ...(rest.headers ?? {}) };
+  const nextOpts = {
+    ...(revalidate ? { revalidate } : {}),
+    ...(tags && tags.length ? { tags } : {}),
+  };
   const res = await fetch(`${API_BASE}${path}`, {
     ...rest,
     headers,
-    cache: revalidate ? undefined : ("no-store" as RequestCache),
-    ...(revalidate ? { next: { revalidate } } : {}),
+    cache: revalidate || tags?.length ? undefined : ("no-store" as RequestCache),
+    ...(Object.keys(nextOpts).length ? { next: nextOpts } : {}),
   });
   if (res.status === 304) return { status: 304, data: null };
   if (!res.ok) throw new GitHubApiError(res.status);
@@ -63,12 +67,13 @@ export interface ContentsItem {
 /** 列目录；404 返回 null（目录尚未创建不算错误） */
 export async function githubListDir(
   dirPath: string,
-  revalidate?: number
+  revalidate?: number,
+  tags?: string[]
 ): Promise<ContentsItem[] | null> {
   try {
     const { data } = await githubJson<ContentsItem[]>(
       `/repos/${getConfig().owner}/${getConfig().repo}/contents/${dirPath}`,
-      revalidate ? { revalidate } : {}
+      revalidate || tags ? { revalidate, tags } : {}
     );
     return Array.isArray(data) ? data : null;
   } catch (e) {
@@ -80,12 +85,13 @@ export async function githubListDir(
 /** 读文件（Contents JSON，content 为 base64）；404 返回 null */
 export async function githubGetFile(
   filePath: string,
-  revalidate?: number
+  revalidate?: number,
+  tags?: string[]
 ): Promise<ContentsItem | null> {
   try {
     const { data } = await githubJson<ContentsItem>(
       `/repos/${getConfig().owner}/${getConfig().repo}/contents/${filePath}`,
-      revalidate ? { revalidate } : {}
+      revalidate || tags ? { revalidate, tags } : {}
     );
     return data;
   } catch (e) {
@@ -284,12 +290,13 @@ interface TreeResponse {
  * 失败（403/404/网络异常或 truncated）抛 GitHubApiError；根树无 issues 目录 → 返回 []。
  */
 export async function githubListIssueFolders(
-  revalidate?: number
+  revalidate?: number,
+  tags?: string[]
 ): Promise<string[]> {
   const { owner, repo } = getConfig();
   const root = await githubJson<TreeResponse>(
     `/repos/${owner}/${repo}/git/trees/HEAD`,
-    revalidate ? { revalidate } : {}
+    revalidate || tags ? { revalidate, tags } : {}
   );
   if (!root.data || root.data.truncated) throw new GitHubApiError(root.data ? 500 : 404);
   const issuesTree = root.data.tree.find(
@@ -298,7 +305,7 @@ export async function githubListIssueFolders(
   if (!issuesTree) return [];
   const sub = await githubJson<TreeResponse>(
     `/repos/${owner}/${repo}/git/trees/${issuesTree.sha}`,
-    revalidate ? { revalidate } : {}
+    revalidate || tags ? { revalidate, tags } : {}
   );
   if (!sub.data || sub.data.truncated) throw new GitHubApiError(sub.data ? 500 : 404);
   return sub.data.tree

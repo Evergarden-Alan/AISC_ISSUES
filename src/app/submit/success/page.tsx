@@ -149,9 +149,10 @@ export default function SubmitSuccessPage() {
         </p>
       </div>
 
-      <Link href="/" className="mx-auto mt-8 text-sm text-blue-600 hover:underline">
+      {/* 整页加载回首页：确保立刻看到刚提交的条目（Link 的前端路由缓存会拿旧数据） */}
+      <a href="/" className="mx-auto mt-8 text-sm text-blue-600 hover:underline">
         返回首页
-      </Link>
+      </a>
     </main>
   );
 }

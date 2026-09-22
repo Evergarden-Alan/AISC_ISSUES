@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { clientIp, sameOrigin } from "@/lib/guards";
 import { hitVoteLimit } from "@/lib/rate-limit";
 import { AFFECTS_MAX, ID_PATTERN, itemMdCandidates } from "@/lib/constants";
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
       );
       return next;
     });
+    revalidateTag("issues", "max"); // 首页/详情读缓存即时失效
     return NextResponse.json({ ok: true, affects });
   } catch (e) {
     if (e instanceof Error && e.message === "NOT_FOUND") {

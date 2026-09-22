@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import pLimit from "p-limit";
 import {
   GitHubApiError,
@@ -136,6 +137,7 @@ export async function regenerateIndex(): Promise<void> {
       meta?.sha
     );
   });
+  revalidateTag("issues", "max"); // 站点读缓存即时失效，首页/详情不再等 5 分钟
 }
 
 /**

@@ -29,6 +29,7 @@ import {
 // v0.1.2：不再按 hidden 过滤（管理页已移除，status 仅作展示）。
 
 const REVALIDATE_SECONDS = 300;
+const READ_TAGS = ["issues"]; // 写入（提交/投票/每日重建）后按标签精准失效
 
 export interface HomeStats {
   total: number; // 累计反馈数（不含 archived）
@@ -67,7 +68,7 @@ async function readItemMd(
   revalidate?: number
 ): Promise<{ path: string; content: string } | null> {
   for (const path of itemMdCandidates(id)) {
-    const f = await githubGetFile(path, revalidate);
+    const f = await githubGetFile(path, revalidate, READ_TAGS);
     if (f?.content) return { path, content: decodeBase64Utf8(f.content) };
   }
   return null;
@@ -82,13 +83,13 @@ export async function fetchSummaries(): Promise<SummaryItem[]> {
 
   let folders: string[];
   try {
-    folders = await githubListIssueFolders(REVALIDATE_SECONDS);
+    folders = await githubListIssueFolders(REVALIDATE_SECONDS, READ_TAGS);
   } catch (e) {
     console.error(
       "[data] Trees API 读取失败，回退 Contents 列目录：",
       e instanceof Error ? e.message : e
     );
-    const entries = await githubListDir("issues", REVALIDATE_SECONDS);
+    const entries = await githubListDir("issues", REVALIDATE_SECONDS, READ_TAGS);
     folders = (entries ?? [])
       .filter((x) => x.type === "dir" && x.name !== "_pending")
       .map((x) => x.name);
