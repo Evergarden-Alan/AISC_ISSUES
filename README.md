@@ -8,6 +8,7 @@
 - docs/03-architecture.md 目录树、API、lib 工具、环境变量与部署
 - docs/04-implementation.md 里程碑任务分解、实现顺序、seed 与测试映射
 - CLAUDE.md AI 编码代理工作约定
+- docs/05-manual-setup.md 手动操作手册（PAT/部署/域名，写给不熟悉的人）
 
 ## 快速开始
 
