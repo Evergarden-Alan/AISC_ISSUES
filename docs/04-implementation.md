@@ -43,24 +43,24 @@
 ## 4. 里程碑任务分解（可勾选）
 
 ### M1 只读回信区（双 Tab）+ 两条路径基本提交（无附件、无 token 详情页）
-- [ ] §2 脚手架与依赖安装
-- [ ] constants / config + 单测（状态双映射；mask 已随 contact 移除而取消）
-- [ ] github-client：PUT/GET 打通（在反馈仓库写一个临时 md 验证后删除）
-- [ ] markdown-utils：解析/渲染/摘要 + 单测
-- [ ] 首页：Hero + 双 Tab + 各 10 条倒序 + 空态文案
-- [ ] POST /api/feedback：白名单/长度/枚举校验、幂等键、限频、蜜罐、409/422 重试
-- [ ] 双路径表单与失败保留内容可重试（降级三层）
-- [ ] 草稿 localStorage（含路径分桶与切换保留，01 §4.0）
-- [ ] seed 02 §4 三条样例（见 §7）并核验 01 §8 对应项
-- [ ] Vercel Preview 冒烟
+- [x] §2 脚手架与依赖安装
+- [x] constants / config + 单测（状态双映射；mask 已随 contact 移除而取消）
+- [x] github-client：PUT/GET 打通（在反馈仓库写一个临时 md 验证后删除）
+- [x] markdown-utils：解析/渲染/摘要 + 单测
+- [x] 首页：Hero + 双 Tab + 各 10 条倒序 + 空态文案
+- [x] POST /api/feedback：白名单/长度/枚举校验、幂等键、限频、蜜罐、409/422 重试
+- [x] 双路径表单与失败保留内容可重试（降级三层）
+- [x] 草稿 localStorage（含路径分桶与切换保留，01 §4.0）
+- [x] seed 02 §4 三条样例（见 §7）并核验 01 §8 对应项
+- [x] Vercel Preview 冒烟
 
 ### M2 截图 + 日志附件（问题路径）+ 编号查询 + 专属详情页
-- [ ] 截图：≤3 张、jpg/png/webp、客户端压缩 ≤4MB/张、canvas 重绘剥 EXIF
-- [ ] POST /api/attachment（_pending/{uuid} 临时位）
-- [ ] 表单提交时服务端把 _pending 改名归位到 feedback/assets/{id}/；孤儿文件 v1 不清理（02 已注明）
-- [ ] GET /api/asset 代理与路径白名单
-- [ ] /issue/{id}?t={token} 详情页、成功页链接、首页按编号查询
-- [ ] 环境信息自动采集注入（问题路径：UA/操作系统/页面 URL/提交时间；功能路径：仅 UA 与提交时间）
+- [x] 截图：≤3 张、jpg/png/webp、客户端压缩 ≤4MB/张、canvas 重绘剥 EXIF
+- [x] POST /api/attachment（_pending/{uuid} 临时位）
+- [x] 表单提交时服务端把 _pending 改名归位到 feedback/assets/{id}/；孤儿文件 v1 不清理（02 已注明）
+- [x] GET /api/asset 代理与路径白名单
+- [x] /issue/{id}?t={token} 详情页、成功页链接、首页按编号查询
+- [x] 环境信息自动采集注入（问题路径：UA/操作系统/页面 URL/提交时间；功能路径：仅 UA 与提交时间）
 
 ### M3 列表筛选搜索 + 轻统计 +（可选）受保护管理页
 - [ ] 「查看全部」列表页：问题/功能维度 + 状态 + 类型筛选 + 关键词搜索
