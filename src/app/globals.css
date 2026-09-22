@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 面向不懂编程用户的正文渲染（M2 详情页复用） */
+.feedback-prose h2 {
+  @apply mt-6 mb-2 text-lg font-semibold text-slate-900;
+}
+.feedback-prose p {
+  @apply my-2 leading-relaxed whitespace-pre-wrap;
+}
