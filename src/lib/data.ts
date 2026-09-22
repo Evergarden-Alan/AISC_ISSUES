@@ -8,9 +8,12 @@ import {
 import {
   compareByUpdatedAt,
   extractLatestReply,
+  extractReplyRounds,
   parseFeedback,
+  splitSections,
 } from "./markdown-utils.ts";
 import { deriveCategory } from "../types/feedback.ts";
+import type { FeedbackFrontmatter } from "../types/feedback.ts";
 import type { ReplyItem } from "../types/feedback.ts";
 
 // 服务端读层（03 §5）：Server Component 专用，ISR revalidate=300。
@@ -88,4 +91,45 @@ async function listFeedbackSummaries(): Promise<Summary[]> {
     )
   );
   return results.filter((r): r is Summary => r !== null);
+}
+
+// ===== 详情页读取（/issue/{id}，M2）=====
+
+export type IssueDetailResult =
+  | { kind: "ok"; detail: IssueDetail }
+  | { kind: "hidden" }
+  | null; // null = 不存在
+
+export interface IssueDetail {
+  fm: FeedbackFrontmatter;
+  /** 正文分区（保持模板顺序；「开发者回复」分区除外，回信走 replies） */
+  sections: { title: string; text: string }[];
+  /** 开发者回复轮次（正序） */
+  replies: { time: string; text: string }[];
+  category: "issue" | "feature";
+}
+
+export async function getIssue(id: string): Promise<IssueDetailResult> {
+  try {
+    const file = await githubGetFile(`feedback/${id}.md`, REVALIDATE_SECONDS);
+    if (!file?.content) return null;
+    const parsed = parseFeedback(decodeBase64Utf8(file.content));
+    if (!parsed) return null;
+    if (parsed.fm.status === "hidden") return { kind: "hidden" };
+    const sections = splitSections(parsed.body).filter(
+      (s) => s.title !== "开发者回复"
+    );
+    return {
+      kind: "ok",
+      detail: {
+        fm: parsed.fm,
+        sections,
+        replies: extractReplyRounds(parsed.body),
+        category: deriveCategory(parsed.fm.type),
+      },
+    };
+  } catch (e) {
+    console.error("[data] 读取反馈详情失败：", e);
+    return null;
+  }
 }

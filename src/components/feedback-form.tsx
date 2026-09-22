@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { ShieldAlert, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/form-controls";
+import { ScreenshotUploader } from "@/components/screenshot-uploader";
+import { AttachmentUploader } from "@/components/attachment-uploader";
 import {
   ISSUE_TYPE_SUBTEXT,
   ISSUE_TYPE_VALUES,
@@ -142,6 +144,8 @@ export function FeedbackForm() {
       scenario: !isIssue ? state.feature.scenario.trim() : undefined,
       workaround: !isIssue ? state.feature.workaround.trim() : undefined,
       nickname: state.shared.nickname.trim() || undefined,
+      screenshots: state.shared.screenshots,
+      attachments: isIssue ? state.issue.attachments : undefined,
       env: {
         ua: navigator.userAgent,
         platform: navigator.platform || "",
@@ -159,14 +163,17 @@ export function FeedbackForm() {
         body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => null)) as
-        | { ok: boolean; id?: string; error?: string }
+        | { ok: boolean; id?: string; url?: string; error?: string }
         | null;
-      if (res.ok && data?.ok && data.id) {
+      if (res.ok && data?.ok && data.id && data.url) {
         clearDraft();
         // 轮换幂等键，避免下次提交复用旧键
         setState((s) => ({ ...s, ...emptyDraft(), idempotencyKey: makeUuidV4() }));
         try {
-          sessionStorage.setItem("aisc:last-submit", JSON.stringify({ id: data.id }));
+          sessionStorage.setItem(
+            "aisc:last-submit",
+            JSON.stringify({ id: data.id, url: `${location.origin}${data.url}` })
+          );
         } catch {
           // 忽略：成功页读取不到时回首页
         }
@@ -465,6 +472,44 @@ export function FeedbackForm() {
           </div>
         </div>
       )}
+
+      {/* 现场截图（两路径均可传，≤3 张，客户端压缩+剥 EXIF） */}
+      <div className="mt-6">
+        <Label>现场截图（可不传，最多 3 张）</Label>
+        <div className="mt-2">
+          <ScreenshotUploader
+            value={state.shared.screenshots}
+            onChange={(v) => patchShared({ screenshots: v })}
+          />
+        </div>
+      </div>
+
+      {/* 详细反馈折叠区（仅问题路径）：日志附件（01 §4.2） */}
+      {isIssue ? (
+        <details className="group mt-6 rounded-xl border border-slate-200 bg-white p-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between">
+            <span className="text-base font-medium">
+              上传软件日志等辅助材料（可选）
+            </span>
+            <span className="flex items-center gap-2 text-sm text-slate-400">
+              {state.issue.attachments.length > 0 ? (
+                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">
+                  已添加 {state.issue.attachments.length} 个
+                </span>
+              ) : null}
+              <span aria-hidden className="transition-transform group-open:rotate-180">
+                ▾
+              </span>
+            </span>
+          </summary>
+          <div className="mt-4">
+            <AttachmentUploader
+              value={state.issue.attachments}
+              onChange={(v) => patchIssue({ attachments: v })}
+            />
+          </div>
+        </details>
+      ) : null}
 
       {/* 怎么称呼您（两路径共用，选填 ≤20 字） */}
       <div className="mt-6">

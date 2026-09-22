@@ -40,6 +40,8 @@ export interface ValidatedFeedback {
   scenario?: string; // 仅功能路径
   workaround?: string; // 仅功能路径
   nickname?: string;
+  screenshots?: { ref: string; originalName: string }[]; // _pending 引用，≤3
+  attachments?: { ref: string; originalName: string }[]; // 仅问题路径，≤3；非空 ⇒ tier=detailed
   env: {
     ua?: string;
     platform?: string;

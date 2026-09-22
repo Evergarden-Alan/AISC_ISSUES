@@ -104,6 +104,15 @@ export async function githubPutFile(
   contentUtf8: string,
   message: string
 ): Promise<string> {
+  return githubPutFileBytes(filePath, Buffer.from(contentUtf8, "utf-8"), message);
+}
+
+/** 二进制版 PUT（截图/日志等附件） */
+export async function githubPutFileBytes(
+  filePath: string,
+  bytes: Buffer,
+  message: string
+): Promise<string> {
   // 双保险断言（沿参考项目）：拒路径穿越
   if (filePath.includes("..") || filePath.startsWith("/")) {
     throw new GitHubApiError(400);
@@ -117,13 +126,35 @@ export async function githubPutFile(
       cache: "no-store",
       body: JSON.stringify({
         message,
-        content: Buffer.from(contentUtf8, "utf-8").toString("base64"),
+        content: bytes.toString("base64"),
       }),
     }
   );
   if (!res.ok) throw new GitHubApiError(res.status);
   const data = (await res.json()) as { content?: { sha?: string } };
   return data.content?.sha ?? "";
+}
+
+/** 删除文件；目标不存在（404）视为已删除，静默通过 */
+export async function githubDeleteFile(
+  filePath: string,
+  sha: string,
+  message: string
+): Promise<void> {
+  if (filePath.includes("..") || filePath.startsWith("/")) {
+    throw new GitHubApiError(400);
+  }
+  const { pat, owner, repo } = getConfig();
+  const res = await fetch(
+    `${API_BASE}/repos/${owner}/${repo}/contents/${filePath}`,
+    {
+      method: "DELETE",
+      headers: baseHeaders(pat),
+      cache: "no-store",
+      body: JSON.stringify({ message, sha }),
+    }
+  );
+  if (!res.ok && res.status !== 404) throw new GitHubApiError(res.status);
 }
 
 /**

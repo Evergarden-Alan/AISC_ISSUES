@@ -1,6 +1,8 @@
 import { randomInt } from "node:crypto";
 import { beijingStamp } from "./beijing-time.ts";
 
+export { ID_PATTERN } from "./constants.ts";
+
 // id = {北京时间 YYYYMMDD}-{HHmmss}-{6 位随机 [a-z0-9]}（02 §5.1）
 const ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"; // 36 个字符
 
@@ -15,5 +17,3 @@ export function randomSuffix(len = 6): string {
 export function makeId(nowMs: number): string {
   return `${beijingStamp(nowMs)}-${randomSuffix()}`;
 }
-
-export const ID_PATTERN = /^\d{8}-\d{6}-[a-z0-9]{6}$/;

@@ -7,12 +7,18 @@ import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SLA_TEXT } from "@/lib/constants";
 
-// 提交成功页（01 §6.1；M1 版：仅编号 + 复制编号 + SLA，不渲染专属链接区——M2 起补全）
+// 提交成功页（01 §6.1 定稿）：编号 + 复制编号 + 专属链接区（M2 起渲染）+ SLA
+
+interface LastSubmit {
+  id: string;
+  url: string; // 绝对地址（表单提交成功时拼好）
+}
 
 export default function SubmitSuccessPage() {
   const router = useRouter();
-  const [id, setId] = useState<string>("");
-  const [copied, setCopied] = useState(false);
+  const [last, setLast] = useState<LastSubmit | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   useEffect(() => {
     let raw: string | null = null;
@@ -21,32 +27,42 @@ export default function SubmitSuccessPage() {
     } catch {
       // 忽略
     }
-    let nextId = "";
+    let parsed: LastSubmit | null = null;
     try {
-      nextId = raw ? ((JSON.parse(raw) as { id?: string }).id ?? "") : "";
+      if (raw) {
+        const obj = JSON.parse(raw) as { id?: string; url?: string };
+        if (obj.id && obj.url) parsed = { id: obj.id, url: obj.url };
+      }
     } catch {
-      nextId = "";
+      parsed = null;
     }
-    if (!nextId) {
+    if (!parsed) {
       router.replace("/");
       return;
     }
     // 同步读取客户端存储后 setState：sessionStorage 仅浏览器存在，
     // 不能在 useState 初始化器中读取（SSR 预渲染会失败/不一致）。
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setId(nextId);
+    setLast(parsed);
   }, [router]);
 
-  async function copyId() {
-    if (!id) return;
+  async function copy(text: string, which: "id" | "url") {
     try {
-      await navigator.clipboard.writeText(id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      if (which === "id") {
+        setCopiedId(true);
+        setTimeout(() => setCopiedId(false), 2000);
+      } else {
+        setCopiedUrl(true);
+        setTimeout(() => setCopiedUrl(false), 2000);
+      }
     } catch {
-      // 剪贴板 API 不可用（部分内置浏览器）：编号为可长按选择的纯文本
-      setCopied(false);
+      // 剪贴板 API 不可用（部分内置浏览器）：内容为可长按选择的纯文本
     }
+  }
+
+  if (!last) {
+    return <main className="min-h-dvh" />; // 等待读取/跳转
   }
 
   return (
@@ -60,20 +76,21 @@ export default function SubmitSuccessPage() {
         </div>
         <h1 className="mt-4 text-2xl font-bold">提交成功，谢谢您！</h1>
 
+        {/* 编号区 */}
         <div className="mt-8 text-left">
           <p className="text-sm text-slate-500">您的反馈编号</p>
           <p
             className="mt-1 select-all break-all rounded-lg bg-slate-100 px-4 py-3 font-mono text-xl tracking-wide"
-            aria-label={`反馈编号 ${id}`}
+            aria-label={`反馈编号 ${last.id}`}
           >
-            {id}
+            {last.id}
           </p>
           <Button
             variant="outline"
-            onClick={copyId}
+            onClick={() => copy(last.id, "id")}
             className="mt-3 w-full sm:w-auto"
           >
-            {copied ? (
+            {copiedId ? (
               <>
                 <Check aria-hidden />
                 已复制
@@ -85,18 +102,52 @@ export default function SubmitSuccessPage() {
               </>
             )}
           </Button>
-          <p className="mt-2 text-xs text-slate-500">
-            复制不了？长按编号即可复制。
+          <p className="mt-2 text-xs text-slate-500">复制不了？长按编号即可复制。</p>
+        </div>
+
+        {/* 专属链接区（M2） */}
+        <div className="mt-8 border-t border-slate-200 pt-6 text-left">
+          <p className="text-sm text-slate-500">查看进度的专属链接</p>
+          <p className="mt-1 select-all break-all rounded-lg bg-slate-100 px-4 py-3 font-mono text-sm">
+            {last.url}
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => copy(last.url, "url")}
+              className="w-full sm:w-auto"
+            >
+              {copiedUrl ? (
+                <>
+                  <Check aria-hidden />
+                  已复制
+                </>
+              ) : (
+                <>
+                  <Copy aria-hidden />
+                  复制链接
+                </>
+              )}
+            </Button>
+            <Link
+              href={last.url.replace(/^https?:\/\/[^/]+/, "")}
+              className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-blue-600 px-5 text-base font-medium text-white hover:bg-blue-700 sm:w-auto"
+            >
+              查看我的反馈
+            </Link>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            这个链接就是您反馈的凭证，请收藏（点右上角「…」菜单）或截图保存。之后打开它，就能看到开发者的回复。
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            如果链接丢了，也可以回首页，在「按编号查询」里输入编号找回。
           </p>
         </div>
 
         <p className="mt-8 text-sm text-slate-600">{SLA_TEXT}。</p>
       </div>
 
-      <Link
-        href="/"
-        className="mx-auto mt-8 text-sm text-blue-600 hover:underline"
-      >
+      <Link href="/" className="mx-auto mt-8 text-sm text-blue-600 hover:underline">
         返回首页
       </Link>
     </main>

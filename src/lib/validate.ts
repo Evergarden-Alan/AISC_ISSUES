@@ -4,6 +4,12 @@ import {
   SEVERITY_VALUES,
   TYPE_VALUES,
 } from "./constants.ts";
+import {
+  FILE_EXTS,
+  IMAGE_EXTS,
+  PENDING_REF_PATTERN,
+  extOf,
+} from "./attachments.ts";
 import type { Category, ValidatedFeedback } from "../types/feedback.ts";
 
 // 请求体校验（03 §3.1 校验表为唯一入口，按路径区分）。纯函数，前后端共用限值。
@@ -11,12 +17,14 @@ import type { Category, ValidatedFeedback } from "../types/feedback.ts";
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** v0.1.0（M1）不支持附件：出现引用即拒绝 */
-const ATTACHMENTS_NOT_READY = "截图与附件功能即将开放，本次请先用文字描述";
-
 export type ValidateResult =
   | { ok: true; value: ValidatedFeedback; idempotencyKey: string }
   | { ok: false; error: string };
+
+export interface PendingRef {
+  ref: string;
+  originalName: string;
+}
 
 class ValidationError extends Error {}
 
@@ -95,12 +103,20 @@ function doValidate(body: unknown): {
     throw new ValidationError("请选择问题类型");
   }
 
-  // —— 附件引用：v0.1.0 一律拒绝（功能路径出现附件引用同样 400，03 §3.1）——
-  const hasShotRefs = Array.isArray(body.screenshots) && body.screenshots.length > 0;
-  const hasFileRefs = Array.isArray(body.attachments) && body.attachments.length > 0;
-  if (hasShotRefs || hasFileRefs) {
-    throw new ValidationError(ATTACHMENTS_NOT_READY);
+  // —— 附件引用（M2 起支持；按路径与类别校验，03 §3.1）——
+  // 功能路径出现日志附件引用即 400（日志上传仅问题路径提供）；截图/参考图两条路径均可。
+  const hasShots = Array.isArray(body.screenshots);
+  const hasFiles = Array.isArray(body.attachments);
+  if (category === "feature" && hasFiles && (body.attachments as unknown[]).length > 0) {
+    throw new ValidationError("日志附件仅问题反馈路径支持，功能建议请勿上传附件");
   }
+  const screenshots = hasShots
+    ? parseRefs(body.screenshots, [...IMAGE_EXTS], 3, "截图")
+    : undefined;
+  const attachments =
+    category === "issue" && hasFiles
+      ? parseRefs(body.attachments, [...FILE_EXTS], 3, "日志附件")
+      : undefined;
 
   // —— severity：仅问题路径必填；功能路径覆写 normal ——
   let severity = str(body.severity);
@@ -160,7 +176,37 @@ function doValidate(body: unknown): {
     scenario,
     workaround,
     nickname: nickname || undefined,
+    screenshots: screenshots?.length ? screenshots : undefined,
+    attachments: attachments?.length ? attachments : undefined,
     env,
   };
   return { value, idempotencyKey };
+}
+
+/** 引用列表校验：≤max 个；ref 匹配 _pending/{uuid}/{安全化名}；扩展名白名单 */
+function parseRefs(
+  v: unknown,
+  allowedExts: string[],
+  max: number,
+  label: string
+): PendingRef[] {
+  if (!Array.isArray(v)) throw new ValidationError(`${label}格式不正确`);
+  if (v.length > max) throw new ValidationError(`${label}最多 ${max} 个`);
+  return v.map((item) => {
+    if (typeof item !== "object" || item === null) {
+      throw new ValidationError(`${label}格式不正确`);
+    }
+    const { ref, originalName } = item as Record<string, unknown>;
+    if (typeof ref !== "string" || !PENDING_REF_PATTERN.test(ref)) {
+      throw new ValidationError(`${label}上传已过期，请删除后重新上传`);
+    }
+    if (!allowedExts.includes(extOf(ref))) {
+      throw new ValidationError(`${label}文件类型不支持`);
+    }
+    const name =
+      typeof originalName === "string" && originalName.trim()
+        ? originalName.trim().slice(0, 100)
+        : ref.split("/").pop() ?? "file";
+    return { ref, originalName: name };
+  });
 }

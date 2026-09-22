@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MessageSquarePlus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ReplyTabs } from "@/components/reply-tabs";
+import { IdLookup } from "@/components/id-lookup";
 import { getRepliedIssues } from "@/lib/data";
 import { SLA_TEXT } from "@/lib/constants";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,20 @@ export default async function Home() {
           <MessageSquarePlus aria-hidden />
           我要提反馈
         </Link>
+        <a
+          href="#lookup"
+          className="mt-3 block text-sm text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+        >
+          我有编号，查进度
+        </a>
+      </section>
+
+      {/* 按编号查询（M2+） */}
+      <section id="lookup" aria-labelledby="lookup-heading" className="scroll-mt-4 pb-10">
+        <h2 id="lookup-heading" className="mb-3 text-xl font-semibold">
+          按编号查询
+        </h2>
+        <IdLookup />
       </section>
 
       {/* 开发者回信区（双 Tab） */}

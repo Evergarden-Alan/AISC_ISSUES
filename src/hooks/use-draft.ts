@@ -7,6 +7,11 @@ import { LIMITS } from "@/lib/constants";
 
 export type FormPath = "issue" | "feature";
 
+export interface UploadedDraft {
+  ref: string;
+  originalName: string;
+}
+
 export interface DraftState {
   version: 1;
   path: FormPath;
@@ -14,6 +19,7 @@ export interface DraftState {
     title: string;
     description: string;
     nickname: string;
+    screenshots: UploadedDraft[]; // 已上传截图引用（两路径共用，≤3）
   };
   issue: {
     type: "bug" | "ux" | "question" | "other" | null;
@@ -21,6 +27,7 @@ export interface DraftState {
     steps: string;
     expected: string;
     actual: string;
+    attachments: UploadedDraft[]; // 日志附件引用（仅问题路径，≤3）
   };
   feature: {
     scenario: string;
@@ -36,8 +43,15 @@ export function emptyDraft(): DraftState {
   return {
     version: 1,
     path: "issue",
-    shared: { title: "", description: "", nickname: "" },
-    issue: { type: null, severity: null, steps: "", expected: "", actual: "" },
+    shared: { title: "", description: "", nickname: "", screenshots: [] },
+    issue: {
+      type: null,
+      severity: null,
+      steps: "",
+      expected: "",
+      actual: "",
+      attachments: [],
+    },
     feature: { scenario: "", workaround: "" },
     idempotencyKey: "",
     savedAt: "",

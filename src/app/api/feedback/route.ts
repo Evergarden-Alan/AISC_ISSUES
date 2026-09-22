@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateSubmission } from "@/lib/validate";
 import { hitRateLimit, checkIdempotency, finishIdempotency } from "@/lib/rate-limit";
-import { createFeedback } from "@/lib/feedback";
+import { createFeedback, StaleRefError } from "@/lib/feedback";
 import { GitHubApiError } from "@/lib/github-client";
 import { makeId } from "@/lib/id";
+import { makeIssueToken } from "@/lib/token";
+import { sameOrigin, clientIp } from "@/lib/guards";
 
 // POST /api/feedback —— 薄控制器（03 §3.1）：校验 → 调 lib → 组装响应。
 // 安全：Origin 同源校验；蜜罐静默丢弃；同 IP 限频；幂等键；服务端白名单。
@@ -13,25 +15,6 @@ export const maxDuration = 60;
 
 function fail(error: string, status = 400) {
   return NextResponse.json({ ok: false, error }, { status });
-}
-
-function sameOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get("origin");
-  if (!origin) return false;
-  const allowed = new Set<string>();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (siteUrl) allowed.add(siteUrl.replace(/\/$/, ""));
-  const host = req.headers.get("host");
-  if (host) {
-    allowed.add(`https://${host}`);
-    allowed.add(`http://${host}`);
-  }
-  return allowed.has(origin.replace(/\/$/, ""));
-}
-
-function clientIp(req: NextRequest): string {
-  const xff = req.headers.get("x-forwarded-for");
-  return xff?.split(",")[0]?.trim() || "unknown"; // 取不到按 unknown 合并计数（宁可误伤）
 }
 
 export async function POST(req: NextRequest) {
@@ -82,13 +65,18 @@ export async function POST(req: NextRequest) {
   const validated = validateSubmission(body);
   if (!validated.ok) return fail(validated.error);
 
-  // ⑦ 写入私有反馈仓库（409/422 换随机串重试在编排层内）
+  // ⑦ 写入私有反馈仓库（预检/归位/409/422 换随机串重试都在编排层内）
   try {
     const id = await createFeedback(validated.value);
-    const result = { ok: true as const, id };
+    const token = makeIssueToken(id);
+    const url = `/issue/${id}?t=${token}`;
+    const result = { ok: true as const, id, token, url };
     finishIdempotency(bodyKey, result);
     return NextResponse.json(result);
   } catch (e) {
+    if (e instanceof StaleRefError) {
+      return fail("截图上传已过期，请删除后重新上传");
+    }
     console.error(
       "[api/feedback] 写入失败：",
       e instanceof GitHubApiError ? `GitHub API ${e.status}` : e

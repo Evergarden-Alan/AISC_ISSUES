@@ -52,6 +52,34 @@ export function hitRateLimit(ip: string, now: number = Date.now()): RateVerdict 
   return { allowed: true };
 }
 
+// ===== 附件上传限频（03 §7.1：同 IP 20 次/小时，无冷却）=====
+
+const UPLOAD_MAX_PER_HOUR = 20;
+
+interface UploadEntry {
+  count: number;
+  windowStart: number;
+}
+
+const uploadMap = new Map<string, UploadEntry>();
+
+export function hitUploadLimit(ip: string, now: number = Date.now()): boolean {
+  if (uploadMap.size >= MAX_MAP_SIZE) uploadMap.clear();
+  const key = `up:${ip}`;
+  const entry = uploadMap.get(key);
+  if (entry) {
+    if (now - entry.windowStart > HOUR_MS) {
+      entry.count = 0;
+      entry.windowStart = now;
+    }
+    if (entry.count >= UPLOAD_MAX_PER_HOUR) return false;
+    entry.count += 1;
+    return true;
+  }
+  uploadMap.set(key, { count: 1, windowStart: now });
+  return true;
+}
+
 // ===== 幂等键（防重复提交，03 §6.1）=====
 
 const IDEMPOTENCY_TTL_MS = 15 * 60_000;

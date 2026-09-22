@@ -79,13 +79,61 @@ test("type=feature 即功能路径（severity 覆写）；非法 type 值拒绝"
   if (!r2.ok) assert.equal(r2.error, "请选择问题类型");
 });
 
-test("功能路径出现附件引用 → 400（日志上传仅问题路径提供）", () => {
+test("功能路径出现日志附件引用 → 400（日志上传仅问题路径提供）", () => {
   const r = validateSubmission({
     ...FEATURE_OK,
-    attachments: [{ ref: "_pending/xxx/a.log", originalName: "a.log" }],
+    attachments: [{ ref: "_pending/3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829/a.log", originalName: "a.log" }],
   });
   assert.equal(r.ok, false);
   if (!r.ok) assert.ok(r.error.includes("附件"));
+});
+
+test("问题路径合法截图/附件引用通过；功能路径截图（参考图）也通过", () => {
+  const uuid = "3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829";
+  const r1 = validateSubmission({
+    ...ISSUE_OK,
+    screenshots: [{ ref: `_pending/${uuid}/屏幕截图.png`, originalName: "屏幕截图.png" }],
+    attachments: [{ ref: `_pending/${uuid}/debug.log`, originalName: "debug.log" }],
+  });
+  assert.equal(r1.ok, true);
+  if (r1.ok) {
+    assert.equal(r1.value.screenshots?.length, 1);
+    assert.equal(r1.value.attachments?.length, 1);
+  }
+  const r2 = validateSubmission({
+    ...FEATURE_OK,
+    screenshots: [{ ref: `_pending/${uuid}/参考图.webp`, originalName: "参考图.webp" }],
+  });
+  assert.equal(r2.ok, true);
+});
+
+test("引用校验：非法 ref / 超数量 / 扩展名不符均拒绝", () => {
+  const uuid = "3f2a1b0c-9d8e-4f7a-b6c5-d4e5f6071829";
+  const r1 = validateSubmission({
+    ...ISSUE_OK,
+    screenshots: [{ ref: "_pending/not-a-uuid/a.png", originalName: "a.png" }],
+  });
+  assert.equal(r1.ok, false);
+  if (!r1.ok) assert.ok(r1.error.includes("过期"));
+
+  const r2 = validateSubmission({
+    ...ISSUE_OK,
+    screenshots: [
+      { ref: `_pending/${uuid}/1.png`, originalName: "1.png" },
+      { ref: `_pending/${uuid}/2.png`, originalName: "2.png" },
+      { ref: `_pending/${uuid}/3.png`, originalName: "3.png" },
+      { ref: `_pending/${uuid}/4.png`, originalName: "4.png" },
+    ],
+  });
+  assert.equal(r2.ok, false);
+  if (!r2.ok) assert.ok(r2.error.includes("3"));
+
+  const r3 = validateSubmission({
+    ...ISSUE_OK,
+    attachments: [{ ref: `_pending/${uuid}/virus.exe`, originalName: "virus.exe" }],
+  });
+  assert.equal(r3.ok, false);
+  if (!r3.ok) assert.ok(r3.error.includes("类型不支持"));
 });
 
 test("白名单外字段 → 整体 400", () => {

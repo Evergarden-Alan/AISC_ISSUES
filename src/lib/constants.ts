@@ -87,6 +87,9 @@ export function statusLabel(
   return STATUS_LABELS[status][category];
 }
 
+/** 反馈 id / 用户可见编号格式（02 §5.1） */
+export const ID_PATTERN = /^\d{8}-\d{6}-[a-z0-9]{6}$/;
+
 /** 空态与 SLA 文案（定稿，01 §3） */
 export const SLA_TEXT = "我们通常在 3 个工作日内回复";
 export const EMPTY_REPLY_TEXT = `${SLA_TEXT}。`;
