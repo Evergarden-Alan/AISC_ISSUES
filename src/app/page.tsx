@@ -2,11 +2,10 @@ import Link from "next/link";
 import { MessageSquarePlus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { IssuesBrowser } from "@/components/issues-browser";
-import { IdLookup } from "@/components/id-lookup";
 import { getHomeData } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
-// 首页（v0.1.2）：Hero → 轻统计 → 查询框 → 全部反馈列表（含状态，v0.1.1 的 /issues 并入）→ 页脚
+// 首页（v0.1.2）：Hero → 轻统计 → 全部反馈列表（含状态与搜索筛选，v0.1.1 的 /issues 并入）→ 页脚
 // 带 q/from/to 筛选直达；数据读经 ISR 缓存（300s），页面按请求渲染以支持 URL 参数。
 
 export const revalidate = 300;
@@ -67,11 +66,6 @@ export default async function Home({
             </dd>
           </div>
         </dl>
-      </section>
-
-      {/* 编号 / 关键词查询（v0.1.2 M5：完整目录名直达详情，其余转列表搜索） */}
-      <section aria-label="反馈查询" className="pb-10">
-        <IdLookup />
       </section>
 
       {/* 全部反馈（v0.1.2：全量条目 + 状态徽章 + 筛选，隐藏不过滤） */}
