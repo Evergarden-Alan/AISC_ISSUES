@@ -6,6 +6,8 @@ import {
   extractLatestReply,
   extractReplyRounds,
   splitSections,
+  setFrontmatterField,
+  appendDeveloperReply,
   cleanUserText,
   compareByUpdatedAt,
 } from "../src/lib/markdown-utils.ts";
@@ -224,4 +226,37 @@ test("extractReplyRounds 解析全部轮次（时间 + 正文，正序）", () =
   assert.equal(rounds[1].time, "2026-09-20 10:05");
   assert.equal(rounds[1].text, "修复已进入内测。");
   assert.deepEqual(extractReplyRounds("## 开发者回复\n\n（暂无）"), []);
+});
+
+test("setFrontmatterField：改 status/updated_at，字段缺失时原样返回", () => {
+  const raw = `---\nid: "x"\nstatus: "submitted"\nupdated_at: "2026-09-21T14:30:25+08:00"\n---\n\n## 问题描述\n\nstatus: "fake"`;
+  const out = setFrontmatterField(raw, "status", "replied");
+  assert.ok(out.includes('status: "replied"'));
+  assert.ok(out.includes('status: "fake"')); // 正文不受影响
+  const out2 = setFrontmatterField(out, "updated_at", "2026-09-22T09:00:00+08:00");
+  assert.ok(out2.includes('updated_at: "2026-09-22T09:00:00+08:00"'));
+  const out3 = setFrontmatterField(raw, "nickname", "小明"); // 不存在的字段：不新增
+  assert.ok(!out3.includes("nickname:"));
+});
+
+test("appendDeveloperReply：首轮替换占位；多轮向下追加；行首 # 转义", () => {
+  const base = renderFeedbackMarkdown(
+    {
+      category: "issue", type: "bug", severity: "normal",
+      title: "t", description: "d", env: {},
+    },
+    "20260921-143025-a3f9kz",
+    FIXED_NOW
+  );
+  const r1 = appendDeveloperReply(base, "2026-09-22 09:05", "收到，下个版本修复。");
+  assert.ok(r1.includes("### 2026-09-22 09:05 开发者"));
+  assert.ok(!r1.includes("（暂无）")); // 首轮占位被移除
+  const r2 = appendDeveloperReply(r1, "2026-09-23 10:00", "## 伪造分区\\n已上线。");
+  assert.ok(r2.includes("### 2026-09-23 10:00 开发者"));
+  assert.ok(r2.includes("\\## 伪造分区")); // 正文行首 # 被转义
+  assert.equal(extractReplyRounds(r2).length, 2);
+  // 轮次顺序：第一轮在前
+  const rounds = extractReplyRounds(r2);
+  assert.equal(rounds[0].time, "2026-09-22 09:05");
+  assert.equal(rounds[1].time, "2026-09-23 10:00");
 });

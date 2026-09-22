@@ -527,6 +527,7 @@ async function createFeedback(input):
 | `TURNSTILE_ENABLED` | 人机验证开关（默认关） | `false` | 两环境默认 `false`；开启需同时配下面两项 |
 | `TURNSTILE_SECRET_KEY` | Turnstile 服务端校验密钥 | `0x4AAA…` | 仅 `TURNSTILE_ENABLED=true` 时需要 |
 | `TURNSTILE_SITE_KEY` | Turnstile 前端挂载 key（唯一允许的 NEXT_PUBLIC_） | `0x4AAA…` | 同上 |
+| `ADMIN_TOKEN` | 可选：/admin 管理页登录令牌（不配置则管理页停用） | `openssl rand -hex 32` 产物 | 不配置即停用；仅服务端 |
 | `UPSTASH_REDIS_REST_URL` | 可选：Redis 限流（v2 预留） | `https://xxx.upstash.io` | 留空 = 函数内存限流（v1） |
 | `UPSTASH_REDIS_REST_TOKEN` | 同上 | `AXX…` | 留空 |
 

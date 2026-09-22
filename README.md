@@ -26,6 +26,7 @@
 | REPO_OWNER | 反馈仓库所有者 |
 | REPO_NAME | 反馈仓库名 |
 | FEEDBACK_TOKEN_SECRET | 专属详情页 token 签名密钥 |
+| ADMIN_TOKEN | 可选：管理页 /admin 登录令牌（不配则停用） |
 
 可选：NEXT_PUBLIC_SITE_URL（绑定域名后）、UPSTASH_*（限频）、TURNSTILE_ENABLED（默认 false）。全部变量须同时配置到 Vercel 的 Production 与 Preview。
 

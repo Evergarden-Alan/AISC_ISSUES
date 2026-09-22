@@ -51,6 +51,47 @@ export function parseFeedback(raw: string): {
   }
 }
 
+/**
+ * 修改 frontmatter 的单个引号字符串字段（管理页改 status/updated_at 用）。
+ * 仅在 frontmatter 区块内做整行替换；字段不存在则原样返回（不新增）。
+ */
+export function setFrontmatterField(
+  raw: string,
+  field: string,
+  value: string
+): string {
+  if (!raw.startsWith("---")) return raw;
+  const end = raw.indexOf("\n---", 3);
+  if (end === -1) return raw;
+  const head = raw.slice(0, end);
+  const re = new RegExp(`^(${field}: )"[^"]*"$`, "m");
+  if (!re.test(head)) return raw;
+  return head.replace(re, `$1"${yamlSafe(value)}"`) + raw.slice(end);
+}
+
+/**
+ * 在「## 开发者回复」下追加一轮回复（管理页回信用）。
+ * 首轮自动移除"（暂无）"占位；正文做 # 标题转义防伪造。
+ */
+export function appendDeveloperReply(
+  raw: string,
+  time: string,
+  text: string
+): string {
+  const m = raw.match(/^## 开发者回复\s*$/m);
+  if (!m || m.index === undefined) return raw;
+  const start = m.index + m[0].length;
+  const rest = raw.slice(start);
+  const nextH2 = rest.search(/^## /m);
+  const insertAt = nextH2 === -1 ? raw.length : start + nextH2;
+
+  let before = raw.slice(0, insertAt);
+  before = before.replace(/（暂无）\s*$/, "").replace(/\s+$/, "\n");
+  const after = raw.slice(insertAt).trimStart();
+  const clean = cleanUserText(text);
+  return `${before}\n### ${time} 开发者\n\n${clean}\n${after ? `\n${after}` : ""}`;
+}
+
 /** 用户自由文本清洗：剥控制字符（保留换行）+ 行首 # 标题转义（02 §3.3） */
 export function cleanUserText(s: string): string {
   return s

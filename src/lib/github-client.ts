@@ -193,11 +193,12 @@ export async function githubPutFile(
   return githubPutFileBytes(filePath, Buffer.from(contentUtf8, "utf-8"), message);
 }
 
-/** 二进制版 PUT（截图/日志等附件） */
+/** 二进制版 PUT（截图/日志等附件；管理页更新传 sha） */
 export async function githubPutFileBytes(
   filePath: string,
   bytes: Buffer,
-  message: string
+  message: string,
+  sha?: string
 ): Promise<string> {
   // 双保险断言（沿参考项目）：拒路径穿越
   if (filePath.includes("..") || filePath.startsWith("/")) {
@@ -213,6 +214,7 @@ export async function githubPutFileBytes(
       body: JSON.stringify({
         message,
         content: bytes.toString("base64"),
+        ...(sha ? { sha } : {}),
       }),
     }
   );
