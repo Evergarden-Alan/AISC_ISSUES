@@ -4,6 +4,7 @@ import {
   hitRateLimit,
   checkIdempotency,
   finishIdempotency,
+  releaseIdempotency,
 } from "../src/lib/rate-limit.ts";
 
 // 限频 5 次/小时 + 60s 冷却 + 幂等键状态机（03 §6.1、§7；04 §6 映射行）
@@ -63,4 +64,19 @@ test("幂等键 TTL 15 分钟后过期重置", async () => {
   await finishIdempotency(key, { ok: true, id: "x-1" }, t0);
   const after = await checkIdempotency(key, t0 + 16 * 60_000);
   assert.equal(after.kind, "new");
+});
+
+test("releaseIdempotency：释放 in-flight 键（失败后可重试）；done 结果保留", async () => {
+  const t0 = 50_000_000;
+  const k1 = "bbb11111-2222-4333-8444-555555555555";
+  await checkIdempotency(k1, t0); // 标记 in-flight
+  await releaseIdempotency(k1, t0 + 1);
+  assert.deepEqual(await checkIdempotency(k1, t0 + 2), { kind: "new" }); // 已释放，可重新提交
+
+  const k2 = "ccc11111-2222-4333-8444-555555555555";
+  await checkIdempotency(k2, t0);
+  await finishIdempotency(k2, { ok: true, id: "20260921-143025-a3f9kz" }, t0 + 1);
+  await releaseIdempotency(k2, t0 + 2);
+  const done = await checkIdempotency(k2, t0 + 3);
+  assert.equal(done.kind, "done"); // 已成功的结果不因释放丢失（重放仍返回成功）
 });

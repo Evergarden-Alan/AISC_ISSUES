@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   clearDraft,
   loadDraft,
+  saveDraft,
   type DraftState,
 } from "@/hooks/use-draft";
 
@@ -56,32 +57,45 @@ export default function SubmitPendingPage() {
         },
       };
 
-      let result: {
-        res: Response;
-        data: { ok: boolean; id?: string; url?: string; error?: string } | null;
-      } | null = null;
-      try {
-        const res = await fetch("/api/feedback", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-idempotency-key": d.idempotencyKey,
-          },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json().catch(() => null);
-        result = { res, data };
-      } catch {
-        result = null;
+      // 幂等键保护下可安全重试：409＝上一次请求仍在处理（稍候重取结果）；
+      // 网络异常同样重试——服务端未完成时键仍为 in-flight，不会重复提交
+      type SubmitResult = {
+        ok: boolean;
+        id?: string;
+        url?: string;
+        error?: string;
+        staleRef?: string;
+      };
+      let res: Response | null = null;
+      let data: SubmitResult | null = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          res = await fetch("/api/feedback", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-idempotency-key": d.idempotencyKey,
+            },
+            body: JSON.stringify(payload),
+          });
+          data = (await res.json().catch(() => null)) as SubmitResult | null;
+        } catch {
+          res = null;
+          data = null;
+        }
+        if (res && res.status !== 409) break;
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 2500));
+        }
       }
 
-      if (result && result.res.ok && result.data?.ok && result.data.id && result.data.url) {
+      if (res && res.ok && data?.ok && data.id && data.url) {
         try {
           sessionStorage.setItem(
             "aisc:last-submit",
             JSON.stringify({
-              id: result.data.id,
-              url: `${location.origin}${result.data.url}`,
+              id: data.id,
+              url: `${location.origin}${data.url}`,
             })
           );
         } catch {
@@ -92,10 +106,29 @@ export default function SubmitPendingPage() {
         return;
       }
 
-      // 失败：写原因 → 回表单弹 toast（草稿原样保留，可改后重试）
-      const reason =
-        result?.data?.error ||
+      // 失败：写原因 → 回表单弹 toast（除过期附件被定向移除外，其余内容保留）
+      let reason =
+        data?.error ||
         "提交暂时没有成功，可能是网络问题。您填写的内容都保留着，请稍后再试一次。";
+      const staleRef = typeof data?.staleRef === "string" ? data.staleRef : "";
+      if (staleRef) {
+        const shot = d.shared.screenshots.find((x) => x.ref === staleRef);
+        const file = d.issue.attachments.find((x) => x.ref === staleRef);
+        const name =
+          shot?.originalName ?? file?.originalName ?? staleRef.split("/").pop() ?? "附件";
+        saveDraft({
+          ...d,
+          shared: {
+            ...d.shared,
+            screenshots: d.shared.screenshots.filter((x) => x.ref !== staleRef),
+          },
+          issue: {
+            ...d.issue,
+            attachments: d.issue.attachments.filter((x) => x.ref !== staleRef),
+          },
+        });
+        reason = `附件「${name}」已过期失效，已从表单移除，请重新上传后再提交`;
+      }
       try {
         sessionStorage.setItem("aisc:submit-error", reason);
       } catch {

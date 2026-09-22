@@ -21,9 +21,11 @@ const RETRY_DELAYS_MS = [500, 1000, 2000]; // 指数退避（02 §5.2）
 
 /** _pending 引用失效（已过期/被删）——路由层转 400 中文提示 */
 export class StaleRefError extends Error {
-  constructor() {
+  ref: string; // 过期的 _pending 引用（路由层回传给前端做定向清理）
+  constructor(ref: string) {
     super("stale pending ref");
     this.name = "StaleRefError";
+    this.ref = ref;
   }
 }
 
@@ -40,7 +42,7 @@ async function relocateOne(
 
   // raw 读取（>1MB 文件 JSON 读不返回 content）；带重试应对写后读短暂 404
   const bytes = await githubGetFileBytesRetry(pendingPath, { attempts: 4, delayMs: 800 });
-  if (!bytes) throw new StaleRefError();
+  if (!bytes) throw new StaleRefError(ref);
   await githubPutFileBytes(finalPath, bytes, `asset: ${finalPath}`);
   // DELETE 需要 sha：object 方式取元数据（>1MB 也拿得到）；失败留孤儿（v1 不清理，02 §7.2）
   try {

@@ -32,6 +32,7 @@ export interface IdemBackend {
   setIfAbsent(key: string, value: string, ttlMs: number, now?: number): Promise<boolean>;
   get(key: string, now?: number): Promise<string | null>;
   set(key: string, value: string, ttlMs: number, now?: number): Promise<void>;
+  delete(key: string): Promise<void>;
 }
 
 // ===== 判定逻辑（纯编排，键名与阈值集中在这一层）=====
@@ -46,6 +47,8 @@ export interface RateLimiter {
     result: { ok: true; id: string },
     now?: number
   ): Promise<void>;
+  /** 释放 in-flight 幂等键（提交失败后调用）；done 结果保留（重放仍返回成功） */
+  releaseIdempotency(key: string, now?: number): Promise<void>;
 }
 
 export function createRateLimiter(
@@ -99,6 +102,18 @@ export function createRateLimiter(
         IDEMPOTENCY_TTL_MS,
         now
       );
+    },
+    async releaseIdempotency(key, now) {
+      const k = `idem:${key}`;
+      const raw = await idem.get(k, now);
+      if (!raw) return;
+      try {
+        const rec = JSON.parse(raw) as { state?: string };
+        if (rec.state === "done") return; // 已成功的结果不释放
+      } catch {
+        // 无法解析按 in-flight 处理，走删除
+      }
+      await idem.delete(k);
     },
   };
 }
@@ -163,6 +178,9 @@ const memoryIdem: IdemBackend = {
   async set(key, value, ttlMs, now = Date.now()) {
     memKv.set(key, { value, expiresAt: now + ttlMs });
   },
+  async delete(key) {
+    memKv.delete(key);
+  },
 };
 
 // ===== Redis 后端（Upstash REST pipeline；接口报错一律抛出由上层降级）=====
@@ -226,6 +244,9 @@ const redisIdem: IdemBackend = {
   async set(key, value, ttlMs) {
     await upstashPipeline([["SET", key, value, "PX", String(ttlMs)]]);
   },
+  async delete(key) {
+    await upstashPipeline([["DEL", key]]);
+  },
 };
 
 // ===== 对外入口：按配置选后端，Redis 故障逐次降级内存 =====
@@ -269,4 +290,8 @@ export function finishIdempotency(
   now?: number
 ): Promise<void> {
   return run((l) => l.finishIdempotency(key, result, now));
+}
+
+export function releaseIdempotency(key: string, now?: number): Promise<void> {
+  return run((l) => l.releaseIdempotency(key, now));
 }

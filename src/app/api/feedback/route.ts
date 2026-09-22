@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateSubmission } from "@/lib/validate";
-import { hitRateLimit, checkIdempotency, finishIdempotency } from "@/lib/rate-limit";
+import {
+  hitRateLimit,
+  checkIdempotency,
+  finishIdempotency,
+  releaseIdempotency,
+} from "@/lib/rate-limit";
 import { createFeedback, StaleRefError } from "@/lib/feedback";
 import { GitHubApiError } from "@/lib/github-client";
 import { makeId } from "@/lib/id";
@@ -61,6 +66,13 @@ export async function POST(req: NextRequest) {
   if (idem.kind === "done") {
     return NextResponse.json(idem.result);
   }
+  // 本次请求持有幂等键：后续任何失败路径都必须释放，否则 15 分钟内重试全是
+  // 409「正在提交」（真实案例：截图过期 400 后键卡死，用户怎么重试都被拦）
+  const ownsIdemKey = idem.kind === "new";
+  const failOwned = (error: string, status = 400, extra?: Record<string, unknown>) => {
+    const res = NextResponse.json({ ok: false, error, ...extra }, { status });
+    return ownsIdemKey ? releaseIdempotency(bodyKey).then(() => res) : Promise.resolve(res);
+  };
 
   // ⑤.5 Turnstile 人机验证（v0.1.1 M2-1，默认关；开启时缺 token 降级放行并告警）
   if (turnstileEnabled()) {
@@ -68,13 +80,13 @@ export async function POST(req: NextRequest) {
     if (!tsTok) {
       console.warn("[turnstile] 缺 token 降级放行");
     } else if (!(await verifyTurnstileToken(tsTok, clientIp(req)))) {
-      return fail("人机验证未通过，请刷新页面重试");
+      return failOwned("人机验证未通过，请刷新页面重试");
     }
   }
 
   // ⑥ 字段白名单/枚举/长度校验（按路径区分）
   const validated = validateSubmission(body);
-  if (!validated.ok) return fail(validated.error);
+  if (!validated.ok) return failOwned(validated.error);
 
   // ⑦ 写入私有反馈仓库（预检/归位/409/422 换随机串重试都在编排层内）
   try {
@@ -86,12 +98,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof StaleRefError) {
-      return fail("截图上传已过期，请删除后重新上传");
+      return failOwned("截图或附件已过期，请重新上传", 400, { staleRef: e.ref });
     }
     console.error(
       "[api/feedback] 写入失败：",
       e instanceof GitHubApiError ? `GitHub API ${e.status}` : e
     );
-    return fail("提交暂时没有成功，您填写的内容都保留着，请稍后重试", 500);
+    return failOwned("提交暂时没有成功，您填写的内容都保留着，请稍后重试", 500);
   }
 }
