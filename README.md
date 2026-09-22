@@ -34,7 +34,7 @@
 ## TODO-USER（人类待办汇总，完成前站点仅本地/预览可用，细节见 03 §9/§10）
 
 1. 新建专用【私有】GitHub 反馈仓库（与网站代码仓库分离），默认分支 main。
-2. 创建 fine-grained PAT：仅勾选该仓库、仅权限 Contents: Read and write；有效期设 90 天并设日历提醒轮换；只存 Vercel 服务端环境变量，到期后在 Vercel 同步更新。
+2. 创建 fine-grained PAT：仅勾选该仓库、仅权限 Contents: Read and write；有效期 90 天或不逾期（不逾期时记住泄漏应急：吊销→换新→更新环境变量，见 docs/05）；只存 Vercel 服务端环境变量，到期后在 Vercel 同步更新。
 3. 购买域名并将 DNS 解析指向 Vercel → Vercel 项目 Settings→Domains 绑定 → 配置 NEXT_PUBLIC_SITE_URL。
 4. Vercel 项目的 Production 与 Preview 环境均配置全部环境变量（含轮换后的新 PAT）。
 

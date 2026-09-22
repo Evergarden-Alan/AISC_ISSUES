@@ -13,7 +13,7 @@
    （如果页面打不开，先登录 https://github.com ，再点右上角你的头像 → **Settings** → 左侧最底部 **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → 右上角 **Generate new token**）
 2. 按下面填写：
    - **Token name**（名称）：随便填，如 `aisc-issues-site`
-   - **Expiration**（有效期）：选 **90 days**（到期需要换新的，到时候告诉我一声）
+   - **Expiration**（有效期）：选 **90 days** 或 **No expiration（不逾期）**均可。90 天的好处是泄漏后自动失效；选不逾期则请记住应急流程（见本页底部）
    - **Resource owner**：保持 **Evergarden-Alan**（就是你）
 3. **Repository access** 区块：选 **Only select repositories** → 点击 **Select repositories** 下拉 → 勾选 **aisc-issues-feedback**（只勾这一个！不要勾 AISC_ISSUES）
 4. 往下滚动到 **Permissions** → **Repository permissions**：
@@ -24,7 +24,9 @@
    ⚠️ 这个令牌**只显示这一次**，关掉页面就再也看不到了。
 7. 粘贴到本项目根目录的 `.env.local` 文件里，替换掉 `在这里粘贴你的PAT` 那一行
    （用记事本/VS Code 打开 `E:\Windows\Users\alan\Documents\AISC_ISSUES\.env.local` 即可）
-8. 📅 建议在手机日历里加一个"90 天后"的提醒：**更换 GitHub 令牌**（到期后网站会收不到反馈）
+8. 若选了 90 天：📅 在手机日历加"90 天后更换 GitHub 令牌"提醒（到期后网站会收不到反馈）
+
+> **令牌泄漏应急（5 分钟）**：GitHub → Settings → Developer settings → Fine-grained tokens → 点该令牌 → Delete（立即失效）→ 重新生成 → 更新 Vercel 环境变量与本地 .env.local → Redeploy。触发条件：Vercel 账号异常登录、电脑中病毒、令牌被截图/误发。
 
 > ✅ 第 1 步做完后告诉我，我可以帮你验证令牌是否配置成功，并继续 seed 测试数据。
 
