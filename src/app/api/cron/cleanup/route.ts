@@ -17,7 +17,7 @@ import { regenerateIndex } from "@/lib/feedback";
 import { PENDING_BASE } from "@/lib/constants";
 
 // GET /api/cron/cleanup —— 每日自动任务（v0.1.2）：
-// ① 清理两处暂存区超龄孤儿：issues/_pending（现行）+ feedback/assets/_pending（v0.1.0 残留）；
+// ① 清理暂存区超龄孤儿（issues/_pending；v0.1.0 旧布局 feedback/ 目录已于 2026-09-23 从仓库彻底移除）；
 // ② 全量重建仓库根 索引.md（开发者直接改 md 后的最长同步周期 = 1 天）。
 // 鉴权：Authorization: Bearer ${CRON_SECRET}（Vercel Cron 自动附带）；未配置或不匹配一律 404。
 // 规则：日期化目录距今 >7 天即删；遗留裸 uuid 目录自 2026-09-29 起视为超龄；
@@ -115,9 +115,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "未找到该页面" }, { status: 404 });
   }
 
-  // ① 两处暂存区（现行 + 旧路径残留，后者清空后即恒为 no-op）
+  // ① 暂存区超龄孤儿清理
   const r1 = await cleanupBase(PENDING_BASE);
-  const r2 = await cleanupBase("feedback/assets/_pending");
 
   // ② 顺带全量重建仓库根索引
   let indexRebuilt = false;
@@ -129,11 +128,11 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    ok: r1.ok && r2.ok,
-    scanned: r1.scanned + r2.scanned,
-    deletedDirs: r1.deletedDirs + r2.deletedDirs,
-    deletedFiles: r1.deletedFiles + r2.deletedFiles,
-    failed: r1.failed + r2.failed,
+    ok: r1.ok,
+    scanned: r1.scanned,
+    deletedDirs: r1.deletedDirs,
+    deletedFiles: r1.deletedFiles,
+    failed: r1.failed,
     indexRebuilt,
   });
 }
