@@ -24,7 +24,39 @@ aisc-issues-feedback（私有）
    └─ 20260922-概述-提出者/  ← 每条反馈一个目录：反馈.md（功能=需求.md）+ 附件同目录
 ```
 
-开发者工作流：克隆仓库 → 看 `索引.md` 总览 → 处理完改对应 md 的 `status` 字段标记进度（站点 ≤5 分钟同步，索引自动跟上）。
+开发者工作流见下节。
+
+## 开发者工作流（处理反馈）
+
+1. 克隆反馈仓库，打开 `索引.md` 看总览（两张表：反馈 / 需求）。
+2. 进入对应目录 `issues/{日期-概述-提出者}/`，看 `反馈.md`（功能为 `需求.md`）与附件。
+3. 处理完成后直接改 md 的 frontmatter 标记进度：
+
+   ```yaml
+   status: "resolved"     # submitted → resolved
+   updated_at: "2026-09-23T14:30:00+08:00"   # 顺手同步改，首页列表按它倒序
+   ```
+
+   `status` 取值与前端显示对照：
+
+   | status | 问题路径显示 | 功能（需求）路径显示 |
+   |---|---|---|
+   | `submitted` | 已收到 | 已收到 |
+   | `in-progress` | 处理中 | 开发中 |
+   | `replied` | 已回复 | 已回复 |
+   | `resolved` | 已解决 | 已上线 |
+   | `wontfix` | 暂不处理 | 暂不计划 |
+   | `duplicate` | 重复 | 重复 |
+
+4. 想给用户留言，在 md 末尾「## 开发者回复」区追加一轮（详情页按时间线展示）：
+
+   ```markdown
+   ### 2026-09-23 14:30 开发者
+
+   已定位到是 xx 问题，v1.2.1 已修复，请更新后重试。
+   ```
+
+生效时间：详情页与首页列表 ≤5 分钟自动更新（ISR 缓存）；`索引.md` 的「当前进度」列在下一次用户提交或每日 03:00 自动任务时同步。
 
 ## 快速开始
 
@@ -45,8 +77,6 @@ aisc-issues-feedback（私有）
 | CRON_SECRET | 每日自动任务鉴权（暂存清理 + 索引重建；不配则任务停用） |
 
 可选：NEXT_PUBLIC_SITE_URL（绑定域名后）、UPSTASH_*（Redis 精确限流，留空回退内存）、TURNSTILE_*（人机验证，默认关）。~~ADMIN_TOKEN~~ 已于 v0.1.2 废弃（管理页移除）。全部变量须同时配置到 Vercel 的 Production 与 Preview。
-
-可选：NEXT_PUBLIC_SITE_URL（绑定域名后）、UPSTASH_*（限频）、TURNSTILE_ENABLED（默认 false）。全部变量须同时配置到 Vercel 的 Production 与 Preview。
 
 测试：`npm run test`（= `node --test --experimental-strip-types`）。测试样例 seed 见 docs/archive/v0.1.0/04-implementation.md §7。
 
